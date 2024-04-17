@@ -64,17 +64,17 @@ module starknet_addr::starknet {
     fun set_message_cancellation_delay(delay_in_seconds: u256) {}
 
     #[view]
-    public fun isInitialized(addr: address): bool {
+    public fun is_initialized(addr: address): bool {
         starknet_storage::is_initialized(addr)
     }
 
-    fun numOfSubContracts() {}
+    fun num_of_subContracts() {}
 
-    fun validateInitData() {}
+    fun validate_init_data() {}
 
-    fun processSubContractAddresses() {}
+    fun process_sub_contract_addresses() {}
 
-    public entry fun initializeContractState(
+    public entry fun initialize_contract_state(
         s: &signer,
         program_hash: u256,
         verifier: address,
@@ -176,7 +176,7 @@ module starknet_addr::starknet {
         assert!(state_block_number() == initial_block_number + 1, starknet_err::err_invalid_final_block_number())
     }
 
-    fun processMessages(is_L2_to_L1: bool, program_output: vector<u256>): u64 acquires MessageStorage {
+    fun process_messages(is_L2_to_L1: bool, program_output: vector<u256>): u64 acquires MessageStorage {
         print(&program_output);
         let msg_storage = borrow_global_mut<MessageStorage>(@starknet_addr);
         let l1_to_l2_messages = &mut msg_storage.l1_to_l2_messages;
