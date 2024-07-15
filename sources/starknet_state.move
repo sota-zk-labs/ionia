@@ -1,4 +1,4 @@
-module starknet_addr::starket_state {
+module starknet_addr::starknet_state {
 
     use std::vector;
     use starknet_addr::commitment_tree_update_output;

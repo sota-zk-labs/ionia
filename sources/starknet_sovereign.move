@@ -17,14 +17,14 @@ module starknet_addr::starknet {
     use aptos_framework::event;
     use starknet_addr::starknet_storage::{Storage};
     use starknet_addr::starknet_storage;
-    use starknet_addr::starket_state;
-    use starknet_addr::starket_state::State;
+    use starknet_addr::starknet_state;
+    use starknet_addr::starknet_state::State;
     use starknet_addr::starknet_err;
     use starknet_addr::starknet_output;
 
     #[test_only]
     // use aptos_std::debug::print;
-    use starknet_addr::starket_state::get_global_root;
+    use starknet_addr::starknet_state::get_global_root;
 
     struct MessageStorage has store, key {
         l1_to_l2_messages: Table<vector<u8>, u256>,
@@ -61,7 +61,7 @@ module starknet_addr::starknet {
     const STATE_STRUCT_TAG: vector<u8> = b"STARKNET_1.0_INIT_STARKNET_STATE_STRUCT";
     const CONFIG_HASH_TAG: vector<u8> = b"STARKNET_1.0_STARKNET_CONFIG_HASH";
 
-    fun set_message_cancellation_delay(delay_in_seconds: u256) {}
+    fun set_message_cancellation_delay(_delay_in_seconds: u256) {}
 
     #[view]
     public fun is_initialized(addr: address): bool {
@@ -83,7 +83,7 @@ module starknet_addr::starknet {
         block_number: u256,
         block_hash: u256
     ) {
-        starknet_storage::initialize(s, program_hash, verifier, config_hash, starket_state::new(
+        starknet_storage::initialize(s, program_hash, verifier, config_hash, starknet_state::new(
             global_root,
             block_number,
             block_hash
@@ -97,17 +97,17 @@ module starknet_addr::starknet {
 
     #[view]
     public fun state_root(): u256 {
-        starket_state::get_global_root(starknet_storage::get_state(@starknet_addr))
+        starknet_state::get_global_root(starknet_storage::get_state(@starknet_addr))
     }
 
     #[view]
     public fun state_block_number(): u256 {
-        starket_state::get_block_number(starknet_storage::get_state(@starknet_addr))
+        starknet_state::get_block_number(starknet_storage::get_state(@starknet_addr))
     }
 
     #[view]
     public fun state_block_hash(): u256 {
-        starket_state::get_block_hash(starknet_storage::get_state(@starknet_addr))
+        starknet_state::get_block_hash(starknet_storage::get_state(@starknet_addr))
     }
 
     #[view]
@@ -143,8 +143,8 @@ module starknet_addr::starknet {
         // the processing of the L1 -> L2 messages.
 
         // Process L2 -> L1 messages.
-        let output_offset = starknet_output::get_header_size();
-        let program_output_length = vector::length(&program_output);
+        let _output_offset = starknet_output::get_header_size();
+        let _program_output_length = vector::length(&program_output);
 
         // TODO: process messages
         // output_offset = output_offset + processMessages(
@@ -168,9 +168,9 @@ module starknet_addr::starknet {
         let state = starknet_storage::get_state(@starknet_addr);
 
         event::emit(LogStateUpdate {
-            global_root: starket_state::get_global_root(state),
-            block_number: starket_state::get_block_number(state),
-            blockHash: starket_state::get_block_hash(state)
+            global_root: starknet_state::get_global_root(state),
+            block_number: starknet_state::get_block_number(state),
+            blockHash: starknet_state::get_block_hash(state)
         });
         // Re-entrancy protection (see above).
         assert!(state_block_number() == initial_block_number + 1, starknet_err::err_invalid_final_block_number())
@@ -287,7 +287,7 @@ module starknet_addr::starknet {
 
     #[test(s = @starknet_addr)]
     fun update_state_success(s: &signer) {
-        let state = starket_state::new(0, 0, 0);
+        let state = starknet_state::new(0, 0, 0);
 
         let msg_storage = MessageStorage {
             l1_to_l2_messages: table::new(),

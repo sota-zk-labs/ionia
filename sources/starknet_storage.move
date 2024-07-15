@@ -1,7 +1,7 @@
 module starknet_addr::starknet_storage {
 
-    use starknet_addr::starket_state;
-    use starknet_addr::starket_state::State;
+    use starknet_addr::starknet_state;
+    use starknet_addr::starknet_state::State;
 
     struct Storage has copy, drop, store, key {
         program_hash: u256,
@@ -49,7 +49,7 @@ module starknet_addr::starknet_storage {
 
     public fun update_state(addr: address, starknet_output: vector<u256>) acquires Storage {
         let state = &mut borrow_global_mut<Storage>(addr).state;
-        starket_state::update(state, starknet_output)
+        starknet_state::update(state, starknet_output)
     }
 
     public fun get_state(addr: address): State acquires Storage {

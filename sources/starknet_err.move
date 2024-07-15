@@ -15,6 +15,8 @@ module starknet_addr::starknet_err {
     const EINVALID_FINAL_BLOCK_NUMBER: u64 = 0x40007;
     const ESTARKNET_OUTPUT_TOO_SHORT: u64 = 0x40008;
 
+    const UNEXPECTED_KZG_DA_FLAG: u64 = 0x50001;
+
     public fun err_invalid_block_number(): u64 {
         return EINVALID_BLOCK_NUMBER
     }
@@ -61,5 +63,9 @@ module starknet_addr::starknet_err {
 
     public fun err_invalid_final_block_number(): u64 {
         return EINVALID_FINAL_BLOCK_NUMBER
+    }
+
+    public fun err_unexpected_kzg_da_flag(): u64 {
+        return UNEXPECTED_KZG_DA_FLAG
     }
 }

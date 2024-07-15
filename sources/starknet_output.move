@@ -33,6 +33,12 @@ module starknet_addr::starknet_output {
     const MESSAGE_TO_L2_PAYLOAD_SIZE_OFFSET: u64 = 4;
     const MESSAGE_TO_L2_PREFIX_SIZE: u64 = 5;
 
+    const USE_KZG_DA_OFFSET: u64 = 5;
+
+    public fun get_use_kzg_da_offset(): u64 {
+        return USE_KZG_DA_OFFSET
+    }
+
     public fun get_merkle_update_offset(): u64 {
         return MERKLE_UPDATE_OFFSET
     }
