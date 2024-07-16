@@ -17,6 +17,12 @@ module starknet_addr::starknet_err {
 
     const UNEXPECTED_KZG_DA_FLAG: u64 = 0x50001;
 
+    const NO_STATE_TRANSITION_PROOF: u64 = 0x6001;
+
+    public fun err_no_state_transition_proof(): u64 {
+        return NO_STATE_TRANSITION_PROOF
+    }
+
     public fun err_invalid_block_number(): u64 {
         return EINVALID_BLOCK_NUMBER
     }
