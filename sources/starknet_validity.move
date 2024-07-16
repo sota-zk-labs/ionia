@@ -1,13 +1,60 @@
 module starknet_addr::starknet_validity {
 
+    use std::bcs;
     use std::vector;
-    use std::signer;
-    use std::signer::address_of;
     use starknet_addr::onchain_data_fact;
     use starknet_addr::starknet_err;
     use starknet_addr::starknet_output;
     use starknet_addr::starknet_state;
     use starknet_addr::starknet_storage;
+    use starknet_addr::fact_registry;
+    use starknet_addr::helper;
+    use aptos_std::aptos_hash::keccak256;
+    use aptos_framework::event;
+
+    #[event]
+    struct ConfigHashChanged {
+        changed_by: address,
+        old_config_hash: u256,
+        new_config_hash: u256
+    }
+
+    #[event]
+    struct ProgramHashChanged {
+        changed_by: address,
+        old_program_hash: u256,
+        new_program_hash: u256
+    }
+
+    #[event]
+    struct LogStateUpdate has store, drop {
+        global_root: u256,
+        block_number: u256,
+        block_hash: u256
+    }
+
+    #[event]
+    struct LogStateTransitionFact has store, drop {
+        state_transition_fact: vector<u8>
+    }
+
+    // Random storage slot tags
+    const PROGRAM_HASH_TAG: vector<u8> = b"STARKNET_1.0_INIT_PROGRAM_HASH_UINT";
+    const VERIFIER_ADDRESS_TAG: vector<u8> = b"STARKNET_1.0_INIT_VERIFIER_ADDRESS";
+    const STATE_STRUCT_TAG: vector<u8> = b"STARKNET_1.0_INIT_STARKNET_STATE_STRUCT";
+
+    // The hash of the StarkNet config
+    const CONFIG_HASH_TAG: vector<u8> = b"STARKNET_1.0_STARKNET_CONFIG_HASH";
+
+    #[view]
+    public fun get_config_hash(): u256 {
+        starknet_storage::get_config_hash(@starknet_addr)
+    }
+
+    #[view]
+    public fun get_program_hash(): u256 {
+        starknet_storage::get_program_hash(@starknet_addr)
+    }
 
     #[view]
     public fun state_block_number(): u256 {
@@ -15,9 +62,9 @@ module starknet_addr::starknet_validity {
     }
 
     public fun update_state(
-        program_output: &vector<u64>,
-        onchain_data_hash: u64,
-        onchain_data_size: u64,
+        program_output: &vector<u256>,
+        onchain_data_hash: u256,
+        onchain_data_size: u256,
     ) {
         // Reentrancy protection: read the block number at the beginning
         let initial_block_number = state_block_number();
@@ -34,13 +81,13 @@ module starknet_addr::starknet_validity {
             starknet_err::err_unexpected_kzg_da_flag()
         );
 
+        let fact_data = onchain_data_fact::init_fact_data(onchain_data_hash, onchain_data_size);
+
         let state_transition_fact = onchain_data_fact::encode_fact_with_onchain_data(
-            program_output,
-            onchain_data_hash,
-            onchain_data_size
+            *program_output,
+            fact_data
         );
         update_state_internal(program_output, state_transition_fact);
-        // Note that update_state_internal does an external call and shouldn't be followed by storage changes
 
         // Reentrancy protection: validate final block number
         assert!(
@@ -50,55 +97,39 @@ module starknet_addr::starknet_validity {
     }
 
     public fun update_state_internal(
-        program_output: &vector<u64>,
+        program_output: &vector<u256>,
         state_transition_fact: vector<u8>,
     ) {
         // Validate config hash.
         assert!(
-            *vector::borrow(program_output, starknet_output::get_use_kzg_da_offset()) == config_hash,
+            *vector::borrow(program_output, starknet_output::get_use_kzg_da_offset()) == get_config_hash(),
             starknet_err::err_invalid_config_hash()
         );
 
-        let program_hash = program_hash();
-        let sharp_fact = Hash::keccak256(Vector::concat(
-            Vector::concat(program_hash, Vector::singleton(state_transition_fact))
-        ));
+        let program_hash = get_program_hash();
+        helper::append_vector(&mut state_transition_fact, &helper::u256_to_bytes(program_hash));
+        let sharp_fact = keccak256(bcs::to_bytes(&state_transition_fact));
+
         assert!(
-            IFactRegistry::is_valid(&verifier_address, sharp_fact),
-            Error::permission_denied(NO_STATE_TRANSITION_PROOF)
+            fact_registry::is_valid(sharp_fact),
+            starknet_err::err_no_state_transition_proof()
         );
 
-        LogStateTransitionFact::emit_event(state_transition_fact);
+        event::emit(LogStateTransitionFact {
+            state_transition_fact
+        });
 
         // Perform state update.
-        state().update(program_output);
+        starknet_storage::update_state(@starknet_addr, *program_output);
 
-        // Process the messages after updating the state.
-        // This is safer, as there is a call to transfer the fees during
-        // the processing of the L1 -> L2 messages.
+        // TODO: process message
 
-        // Process L2 -> L1 messages.
-        // let use_kzg_da_offset = (*Vector::borrow(program_output, USE_KZG_DA_OFFSET) as usize);
-        // let output_offset = message_segment_offset(use_kzg_da_offset);
-        // *output_offset = *output_offset + process_messages(
-        // true, // isL2ToL1
-        // &Vector::sub_vector(program_output, output_offset, Vector::length(program_output)),
-        // &l2_to_l1_messages
-        // );
-        //
-        // // Process L1 -> L2 messages.
-        // *output_offset = *output_offset + process_messages(
-        // false, // isL2ToL1
-        // &Vector::sub_vector(program_output, output_offset, Vector::length(program_output)),
-        // &l1_to_l2_messages
-        // );
-        // assert!(
-        // output_offset == Vector::length(program_output),
-        // Error::invalid_argument(STARKNET_OUTPUT_TOO_LONG)
-        // );
-
-        let state_ = state();
-        LogStateUpdate::emit_event(state_.global_root, state_.block_number, state_.block_hash);
+        let state = starknet_storage::get_state(@starknet_addr);
+        event::emit(LogStateUpdate {
+            global_root: starknet_state::get_global_root(state),
+            block_number: starknet_state::get_block_number(state),
+            block_hash: starknet_state::get_block_hash(state)
+        })
     }
 
 }
