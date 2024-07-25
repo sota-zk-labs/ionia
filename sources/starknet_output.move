@@ -34,6 +34,12 @@ module starknet_addr::starknet_output {
     const MESSAGE_TO_L2_PREFIX_SIZE: u64 = 5;
 
     const USE_KZG_DA_OFFSET: u64 = 5;
+    const KZG_SEGMENT_SIZE: u64 = 5;
+
+
+    public fun get_kzg_segment_size(): u64 {
+        return KZG_SEGMENT_SIZE
+    }
 
     public fun get_use_kzg_da_offset(): u64 {
         return USE_KZG_DA_OFFSET

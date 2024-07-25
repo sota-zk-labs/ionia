@@ -15,12 +15,59 @@ module starknet_addr::starknet_err {
     const EINVALID_FINAL_BLOCK_NUMBER: u64 = 0x40007;
     const ESTARKNET_OUTPUT_TOO_SHORT: u64 = 0x40008;
 
-    const UNEXPECTED_KZG_DA_FLAG: u64 = 0x50001;
+    const EUNEXPECTED_KZG_DA_FLAG: u64 = 0x50001;
+    const EINVALID_KZG_SEGMENT_SIZE: u64 = 0x50002;
+    const EINVALID_KZG_PROOF_SIZE: u64 = 0x50003;
+    const EINVALID_PRE_COMPILE_INPUT_SIZE: u64 = 0x50004;
+    const EINVALID_KZG_COMMITMENT: u64 = 0x50005;
+    const EINVALID_Y_VALUE: u64 = 0x50006;
 
-    const NO_STATE_TRANSITION_PROOF: u64 = 0x6001;
+    const ENO_STATE_TRANSITION_PROOF: u64 = 0x60001;
+
+    const EUNEXPECTED_BLOB_HASH_VERSION: u64 = 0x70001;
+    const EUNEXPECTED_VERSION_HASH: u64 = 0x70002;
+
+    const EPOINT_EVALUATION_PRECOMPILE_CALL_FAILED: u64 = 0x8001;
+    const EUNEXPECTED_POINT_EVALUATION_PRECOMPILE_OUTPUT: u64 = 0x80002;
+
+    public fun err_unexpected_version_hash(): u64 {
+        return EUNEXPECTED_VERSION_HASH
+    }
+
+    public fun err_unexpected_point_evaluation_precompile_output(): u64 {
+        return EUNEXPECTED_POINT_EVALUATION_PRECOMPILE_OUTPUT
+    }
+
+    public fun err_point_evaluation_precompile_call_failed(): u64 {
+        return EPOINT_EVALUATION_PRECOMPILE_CALL_FAILED
+    }
+
+    public fun err_invalid_y_value(): u64 {
+        return EINVALID_Y_VALUE
+    }
+
+    public fun err_invalid_kzg_commitment(): u64 {
+        return EINVALID_KZG_COMMITMENT
+    }
+
+    public fun err_invalid_pre_compile_input_size(): u64 {
+        return EINVALID_PRE_COMPILE_INPUT_SIZE
+    }
+
+    public fun err_unexpected_blob_hash_version(): u64 {
+        return EUNEXPECTED_BLOB_HASH_VERSION
+    }
+
+    public fun err_invalid_kzg_proof_size(): u64 {
+        return EINVALID_KZG_PROOF_SIZE
+    }
+
+    public fun err_invalid_kzg_segment_size(): u64 {
+        return EINVALID_KZG_SEGMENT_SIZE
+    }
 
     public fun err_no_state_transition_proof(): u64 {
-        return NO_STATE_TRANSITION_PROOF
+        return ENO_STATE_TRANSITION_PROOF
     }
 
     public fun err_invalid_block_number(): u64 {
@@ -72,6 +119,6 @@ module starknet_addr::starknet_err {
     }
 
     public fun err_unexpected_kzg_da_flag(): u64 {
-        return UNEXPECTED_KZG_DA_FLAG
+        return EUNEXPECTED_KZG_DA_FLAG
     }
 }
