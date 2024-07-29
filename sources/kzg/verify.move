@@ -1,13 +1,10 @@
 module starknet_addr::kzg {
-
     use std::vector;
-    use aptos_std::bls12381_algebra::{G2, G1, Gt, Fr};
-    use aptos_std::crypto_algebra;
-    use aptos_std::crypto_algebra::Element;
-    use aptos_std::from_bcs;
-    use starknet_addr::bls;
-    use starknet_addr::trusted_setup;
+    use aptos_std::bls12381_algebra::{FormatFrLsb, FormatG1Compr, Fr, G1, G2, Gt};
+    use aptos_std::crypto_algebra::{deserialize, eq, pairing, scalar_mul, sub};
+
     use starknet_addr::starknet_err;
+    use starknet_addr::trusted_setup;
 
     const BYTES_PER_COMMITMENT: u64 = 48;
     const BYTES_PER_FIELD_ELEMENT: u64 = 32;
@@ -38,30 +35,45 @@ module starknet_addr::kzg {
             starknet_err::err_invalid_y_value()
         );
 
-        let bls_modulus = bls::get_bls_modulus();
-        let fr_g2 = crypto_algebra::from_u64<Fr>(((bls_modulus - from_bcs::to_u256(z)) % bls_modulus as u64));
-        let fr_g1 = crypto_algebra::from_u64<Fr>(((bls_modulus - from_bcs::to_u256(y)) % bls_modulus as u64));
+        let field_z = std::option::extract(&mut deserialize<Fr, FormatFrLsb>(&z));
+        let field_y = std::option::extract(&mut deserialize<Fr, FormatFrLsb>(&y));
+        let field_commitment = std::option::extract(&mut deserialize<G1, FormatG1Compr>(&commitment_bytes));
+        let field_proof = std::option::extract(&mut deserialize<G1, FormatG1Compr>(&proof_bytes));
 
-        let x_minus_z: Element<G2> = crypto_algebra::add<G2>(
-            &bls::bytes_to_G2(trusted_setup::get_g2_point(1)),
-            &crypto_algebra::scalar_mul<G2, Fr>(&bls::g2(), &fr_g2)
+        let g2s = trusted_setup::get_g2s();
+        let g2 = trusted_setup::get_g2();
+        let a = sub<G2>(&g2s, &scalar_mul<G2, Fr>(&g2, &field_z));
+        let b = sub<G1>(&field_commitment, &scalar_mul<G1, Fr>(&trusted_setup::get_g1_generator(), &field_y));
+
+        let lhs = pairing<G1, G2, Gt>(&field_proof, &a);
+        let rhs = pairing<G1, G2, Gt>(&b, &g2);
+
+        eq(&lhs, &rhs)
+    }
+
+    #[test]
+    fun test_verify_kzg_proof() {
+        let comitment = x"b28ff7af1552ad83a1abf352c3a6bba86511c69d495cdfd7fc81681767c5b516f477436efffbd1ae2a31eb1dbbe5c291";
+        let z_bytes = x"0400000000000000000000000000000000000000000000000000000000000000";
+        let y_bytes = x"5100000000000000000000000000000000000000000000000000000000000000";
+        let proof = x"85d5c5ddc49c8b44bace634bed4dd1c2f3ddc5982b459f702a7756e8896b8f29ae5db9c933ccbb9241af9c01587f3896";
+
+        assert!(
+            verify_kzg_proof(comitment, z_bytes, y_bytes, proof),
+            1
         );
+    }
 
-        let p_minus_y: Element<G1> = crypto_algebra::add(
-            &bls::bytes_to_G1(commitment_bytes),
-            &crypto_algebra::scalar_mul<G1, Fr>(&bls::g1(), &fr_g1)
+    #[test]
+    fun test_incorrect_kzg_proof() {
+        let comitment = x"b28ff7af1552ad83a1abf352c3a6bba86511c69d495cdfd7fc81681767c5b516f477436efffbd1ae2a31eb1dbbe5c291";
+        let z_bytes = x"0500000000000000000000000000000000000000000000000000000000000000";
+        let y_bytes = x"5100000000000000000000000000000000000000000000000000000000000000";
+        let proof = x"85d5c5ddc49c8b44bace634bed4dd1c2f3ddc5982b459f702a7756e8896b8f29ae5db9c933ccbb9241af9c01587f3896";
+
+        assert!(
+            !verify_kzg_proof(comitment, z_bytes, y_bytes, proof),
+            1
         );
-
-        let lhs = crypto_algebra::pairing<G1, G2, Gt>(
-            &p_minus_y,
-            &crypto_algebra::neg(&bls::g2())
-        );
-
-        let rhs = crypto_algebra::pairing<G1, G2, Gt>(
-            &bls::bytes_to_G1(proof_bytes),
-            &x_minus_z
-        );
-
-        return crypto_algebra::eq<Gt>(&lhs, &rhs)
     }
 }
