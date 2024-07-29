@@ -1,9 +1,9 @@
-module starknet_addr::onchain_data_fact {
+module starknet_addr::onchain_data_fact_tree_encoded {
 
     use std::bcs;
-    use aptos_std::from_bcs;
     use std::vector;
     use aptos_std::aptos_hash::keccak256;
+    use aptos_std::from_bcs;
 
     const ONCHAIN_DATA_FACT_ADDITIONAL_WORDS: u64 = 2;
 

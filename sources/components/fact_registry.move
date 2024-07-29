@@ -1,3 +1,4 @@
+// TODO: Add Navori as a dependency
 module starknet_addr::fact_registry {
     use aptos_std::table::{Self, borrow, Table, upsert};
 

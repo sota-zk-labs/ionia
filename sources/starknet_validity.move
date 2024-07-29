@@ -2,16 +2,17 @@ module starknet_addr::starknet_validity {
 
     use std::bcs;
     use std::vector;
-    use starknet_addr::onchain_data_fact;
+    use aptos_std::aptos_hash::keccak256;
+    use aptos_framework::event;
+
+    use starknet_addr::fact_registry;
+    use starknet_addr::helper;
+    use starknet_addr::onchain_data_fact_tree_encoded as onchain_data_fact;
+    use starknet_addr::pre_compile;
     use starknet_addr::starknet_err;
     use starknet_addr::starknet_output;
     use starknet_addr::starknet_state;
     use starknet_addr::starknet_storage;
-    use starknet_addr::pre_compile;
-    use starknet_addr::fact_registry;
-    use aptos_std::aptos_hash::keccak256;
-    use aptos_framework::event;
-    use starknet_addr::helper;
 
     #[event]
     struct ConfigHashChanged {
@@ -47,7 +48,6 @@ module starknet_addr::starknet_validity {
     // The hash of the StarkNet config
     const CONFIG_HASH_TAG: vector<u8> = b"STARKNET_1.0_STARKNET_CONFIG_HASH";
 
-    const POINT_EVALUATION_PRECOMPILE_ADDRESS: address = @0x0A;
     const POINT_EVALUATION_PRECOMPILE_OUTPUT: vector<u8> = x"b2157d3a40131b14c4c675335465dffde802f0ce5218ad012284d7f275d1b37c";
     const PROOF_BYTES_LENGTH: u256 = 48;
 
@@ -185,7 +185,7 @@ module starknet_addr::starknet_validity {
         let blob_hash: vector<u8> = vector::empty<u8>();
         vector::append(&mut blob_hash, x"01");
         assert!(
-            vector::slice(&blob_hash, (0 as u64), (31 as u64)) == helper::get_versioned_hash_version_kzg(),
+            vector::slice(&blob_hash, (0u64), (31 as u64)) == helper::get_versioned_hash_version_kzg(),
             starknet_err::err_unexpected_blob_hash_version()
         );
 
