@@ -1,0 +1,491 @@
+<?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd"><svg version="1.1" width="1200" height="198" onload="init(evt)" viewBox="0 0 1200 198" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:fg="http://github.com/jonhoo/inferno"><!--Flame graph stack visualization. See https://github.com/brendangregg/FlameGraph for latest version, and http://www.brendangregg.com/flamegraphs.html for examples.--><!--NOTES: --><defs><linearGradient id="background" y1="0" y2="1" x1="0" x2="0"><stop stop-color="#eeeeee" offset="5%"/><stop stop-color="#eeeeb0" offset="95%"/></linearGradient></defs><style type="text/css">
+text { font-family:monospace; font-size:12px }
+#title { text-anchor:middle; font-size:17px; }
+#matched { text-anchor:end; }
+#search { text-anchor:end; opacity:0.1; cursor:pointer; }
+#search:hover, #search.show { opacity:1; }
+#subtitle { text-anchor:middle; font-color:rgb(160,160,160); }
+#unzoom { cursor:pointer; }
+#frames > *:hover { stroke:black; stroke-width:0.5; cursor:pointer; }
+.hide { display:none; }
+.parent { opacity:0.5; }
+</style><script type="text/ecmascript"><![CDATA[
+        var nametype = 'Function:';
+        var fontsize = 12;
+        var fontwidth = 0.59;
+        var xpad = 10;
+        var inverted = false;
+        var searchcolor = 'rgb(230,0,230)';
+        var fluiddrawing = true;
+        var truncate_text_right = true;
+    ]]><![CDATA["use strict";
+var details, searchbtn, unzoombtn, matchedtxt, svg, searching, frames, known_font_width;
+function init(evt) {
+    details = document.getElementById("details").firstChild;
+    searchbtn = document.getElementById("search");
+    unzoombtn = document.getElementById("unzoom");
+    matchedtxt = document.getElementById("matched");
+    svg = document.getElementsByTagName("svg")[0];
+    frames = document.getElementById("frames");
+    known_font_width = get_monospace_width(frames);
+    total_samples = parseInt(frames.attributes.total_samples.value);
+    searching = 0;
+
+    // Use GET parameters to restore a flamegraph's state.
+    var restore_state = function() {
+        var params = get_params();
+        if (params.x && params.y)
+            zoom(find_group(document.querySelector('[*|x="' + params.x + '"][y="' + params.y + '"]')));
+        if (params.s)
+            search(params.s);
+    };
+
+    if (fluiddrawing) {
+        // Make width dynamic so the SVG fits its parent's width.
+        svg.removeAttribute("width");
+        // Edge requires us to have a viewBox that gets updated with size changes.
+        var isEdge = /Edge\/\d./i.test(navigator.userAgent);
+        if (!isEdge) {
+            svg.removeAttribute("viewBox");
+        }
+        var update_for_width_change = function() {
+            if (isEdge) {
+                svg.attributes.viewBox.value = "0 0 " + svg.width.baseVal.value + " " + svg.height.baseVal.value;
+            }
+
+            // Keep consistent padding on left and right of frames container.
+            frames.attributes.width.value = svg.width.baseVal.value - xpad * 2;
+
+            // Text truncation needs to be adjusted for the current width.
+            update_text_for_elements(frames.children);
+
+            // Keep search elements at a fixed distance from right edge.
+            var svgWidth = svg.width.baseVal.value;
+            searchbtn.attributes.x.value = svgWidth - xpad;
+            matchedtxt.attributes.x.value = svgWidth - xpad;
+        };
+        window.addEventListener('resize', function() {
+            update_for_width_change();
+        });
+        // This needs to be done asynchronously for Safari to work.
+        setTimeout(function() {
+            unzoom();
+            update_for_width_change();
+            restore_state();
+        }, 0);
+    } else {
+        restore_state();
+    }
+}
+// event listeners
+window.addEventListener("click", function(e) {
+    var target = find_group(e.target);
+    if (target) {
+        if (target.nodeName == "a") {
+            if (e.ctrlKey === false) return;
+            e.preventDefault();
+        }
+        if (target.classList.contains("parent")) unzoom();
+        zoom(target);
+
+        // set parameters for zoom state
+        var el = target.querySelector("rect");
+        if (el && el.attributes && el.attributes.y && el.attributes["fg:x"]) {
+            var params = get_params()
+            params.x = el.attributes["fg:x"].value;
+            params.y = el.attributes.y.value;
+            history.replaceState(null, null, parse_params(params));
+        }
+    }
+    else if (e.target.id == "unzoom") {
+        unzoom();
+
+        // remove zoom state
+        var params = get_params();
+        if (params.x) delete params.x;
+        if (params.y) delete params.y;
+        history.replaceState(null, null, parse_params(params));
+    }
+    else if (e.target.id == "search") search_prompt();
+}, false)
+// mouse-over for info
+// show
+window.addEventListener("mouseover", function(e) {
+    var target = find_group(e.target);
+    if (target) details.nodeValue = nametype + " " + g_to_text(target);
+}, false)
+// clear
+window.addEventListener("mouseout", function(e) {
+    var target = find_group(e.target);
+    if (target) details.nodeValue = ' ';
+}, false)
+// ctrl-F for search
+window.addEventListener("keydown",function (e) {
+    if (e.keyCode === 114 || (e.ctrlKey && e.keyCode === 70)) {
+        e.preventDefault();
+        search_prompt();
+    }
+}, false)
+// functions
+function get_params() {
+    var params = {};
+    var paramsarr = window.location.search.substr(1).split('&');
+    for (var i = 0; i < paramsarr.length; ++i) {
+        var tmp = paramsarr[i].split("=");
+        if (!tmp[0] || !tmp[1]) continue;
+        params[tmp[0]]  = decodeURIComponent(tmp[1]);
+    }
+    return params;
+}
+function parse_params(params) {
+    var uri = "?";
+    for (var key in params) {
+        uri += key + '=' + encodeURIComponent(params[key]) + '&';
+    }
+    if (uri.slice(-1) == "&")
+        uri = uri.substring(0, uri.length - 1);
+    if (uri == '?')
+        uri = window.location.href.split('?')[0];
+    return uri;
+}
+function find_child(node, selector) {
+    var children = node.querySelectorAll(selector);
+    if (children.length) return children[0];
+    return;
+}
+function find_group(node) {
+    var parent = node.parentElement;
+    if (!parent) return;
+    if (parent.id == "frames") return node;
+    return find_group(parent);
+}
+function orig_save(e, attr, val) {
+    if (e.attributes["fg:orig_" + attr] != undefined) return;
+    if (e.attributes[attr] == undefined) return;
+    if (val == undefined) val = e.attributes[attr].value;
+    e.setAttribute("fg:orig_" + attr, val);
+}
+function orig_load(e, attr) {
+    if (e.attributes["fg:orig_"+attr] == undefined) return;
+    e.attributes[attr].value = e.attributes["fg:orig_" + attr].value;
+    e.removeAttribute("fg:orig_" + attr);
+}
+function g_to_text(e) {
+    var text = find_child(e, "title").firstChild.nodeValue;
+    return (text)
+}
+function g_to_func(e) {
+    var func = g_to_text(e);
+    // if there's any manipulation we want to do to the function
+    // name before it's searched, do it here before returning.
+    return (func);
+}
+function get_monospace_width(frames) {
+    // Given the id="frames" element, return the width of text characters if
+    // this is a monospace font, otherwise return 0.
+    text = find_child(frames.children[0], "text");
+    originalContent = text.textContent;
+    text.textContent = "!";
+    bangWidth = text.getComputedTextLength();
+    text.textContent = "W";
+    wWidth = text.getComputedTextLength();
+    text.textContent = originalContent;
+    if (bangWidth === wWidth) {
+        return bangWidth;
+    } else {
+        return 0;
+    }
+}
+function update_text_for_elements(elements) {
+    // In order to render quickly in the browser, you want to do one pass of
+    // reading attributes, and one pass of mutating attributes. See
+    // https://web.dev/avoid-large-complex-layouts-and-layout-thrashing/ for details.
+
+    // Fall back to inefficient calculation, if we're variable-width font.
+    // TODO This should be optimized somehow too.
+    if (known_font_width === 0) {
+        for (var i = 0; i < elements.length; i++) {
+            update_text(elements[i]);
+        }
+        return;
+    }
+
+    var textElemNewAttributes = [];
+    for (var i = 0; i < elements.length; i++) {
+        var e = elements[i];
+        var r = find_child(e, "rect");
+        var t = find_child(e, "text");
+        var w = parseFloat(r.attributes.width.value) * frames.attributes.width.value / 100 - 3;
+        var txt = find_child(e, "title").textContent.replace(/\([^(]*\)$/,"");
+        var newX = format_percent((parseFloat(r.attributes.x.value) + (100 * 3 / frames.attributes.width.value)));
+
+        // Smaller than this size won't fit anything
+        if (w < 2 * known_font_width) {
+            textElemNewAttributes.push([newX, ""]);
+            continue;
+        }
+
+        // Fit in full text width
+        if (txt.length * known_font_width < w) {
+            textElemNewAttributes.push([newX, txt]);
+            continue;
+        }
+
+        var substringLength = Math.floor(w / known_font_width) - 2;
+        if (truncate_text_right) {
+            // Truncate the right side of the text.
+            textElemNewAttributes.push([newX, txt.substring(0, substringLength) + ".."]);
+            continue;
+        } else {
+            // Truncate the left side of the text.
+            textElemNewAttributes.push([newX, ".." + txt.substring(txt.length - substringLength, txt.length)]);
+            continue;
+        }
+    }
+
+    console.assert(textElemNewAttributes.length === elements.length, "Resize failed, please file a bug at https://github.com/jonhoo/inferno/");
+
+    // Now that we know new textContent, set it all in one go so we don't refresh a bazillion times.
+    for (var i = 0; i < elements.length; i++) {
+        var e = elements[i];
+        var values = textElemNewAttributes[i];
+        var t = find_child(e, "text");
+        t.attributes.x.value = values[0];
+        t.textContent = values[1];
+    }
+}
+
+function update_text(e) {
+    var r = find_child(e, "rect");
+    var t = find_child(e, "text");
+    var w = parseFloat(r.attributes.width.value) * frames.attributes.width.value / 100 - 3;
+    var txt = find_child(e, "title").textContent.replace(/\([^(]*\)$/,"");
+    t.attributes.x.value = format_percent((parseFloat(r.attributes.x.value) + (100 * 3 / frames.attributes.width.value)));
+
+    // Smaller than this size won't fit anything
+    if (w < 2 * fontsize * fontwidth) {
+        t.textContent = "";
+        return;
+    }
+    t.textContent = txt;
+    // Fit in full text width
+    if (t.getComputedTextLength() < w)
+        return;
+    if (truncate_text_right) {
+        // Truncate the right side of the text.
+        for (var x = txt.length - 2; x > 0; x--) {
+            if (t.getSubStringLength(0, x + 2) <= w) {
+                t.textContent = txt.substring(0, x) + "..";
+                return;
+            }
+        }
+    } else {
+        // Truncate the left side of the text.
+        for (var x = 2; x < txt.length; x++) {
+            if (t.getSubStringLength(x - 2, txt.length) <= w) {
+                t.textContent = ".." + txt.substring(x, txt.length);
+                return;
+            }
+        }
+    }
+    t.textContent = "";
+}
+// zoom
+function zoom_reset(e) {
+    if (e.tagName == "rect") {
+        e.attributes.x.value = format_percent(100 * parseInt(e.attributes["fg:x"].value) / total_samples);
+        e.attributes.width.value = format_percent(100 * parseInt(e.attributes["fg:w"].value) / total_samples);
+    }
+    if (e.childNodes == undefined) return;
+    for(var i = 0, c = e.childNodes; i < c.length; i++) {
+        zoom_reset(c[i]);
+    }
+}
+function zoom_child(e, x, zoomed_width_samples) {
+    if (e.tagName == "text") {
+        var parent_x = parseFloat(find_child(e.parentNode, "rect[x]").attributes.x.value);
+        e.attributes.x.value = format_percent(parent_x + (100 * 3 / frames.attributes.width.value));
+    } else if (e.tagName == "rect") {
+        e.attributes.x.value = format_percent(100 * (parseInt(e.attributes["fg:x"].value) - x) / zoomed_width_samples);
+        e.attributes.width.value = format_percent(100 * parseInt(e.attributes["fg:w"].value) / zoomed_width_samples);
+    }
+    if (e.childNodes == undefined) return;
+    for(var i = 0, c = e.childNodes; i < c.length; i++) {
+        zoom_child(c[i], x, zoomed_width_samples);
+    }
+}
+function zoom_parent(e) {
+    if (e.attributes) {
+        if (e.attributes.x != undefined) {
+            e.attributes.x.value = "0.0%";
+        }
+        if (e.attributes.width != undefined) {
+            e.attributes.width.value = "100.0%";
+        }
+    }
+    if (e.childNodes == undefined) return;
+    for(var i = 0, c = e.childNodes; i < c.length; i++) {
+        zoom_parent(c[i]);
+    }
+}
+function zoom(node) {
+    var attr = find_child(node, "rect").attributes;
+    var width = parseInt(attr["fg:w"].value);
+    var xmin = parseInt(attr["fg:x"].value);
+    var xmax = xmin + width;
+    var ymin = parseFloat(attr.y.value);
+    unzoombtn.classList.remove("hide");
+    var el = frames.children;
+    var to_update_text = [];
+    for (var i = 0; i < el.length; i++) {
+        var e = el[i];
+        var a = find_child(e, "rect").attributes;
+        var ex = parseInt(a["fg:x"].value);
+        var ew = parseInt(a["fg:w"].value);
+        // Is it an ancestor
+        if (!inverted) {
+            var upstack = parseFloat(a.y.value) > ymin;
+        } else {
+            var upstack = parseFloat(a.y.value) < ymin;
+        }
+        if (upstack) {
+            // Direct ancestor
+            if (ex <= xmin && (ex+ew) >= xmax) {
+                e.classList.add("parent");
+                zoom_parent(e);
+                to_update_text.push(e);
+            }
+            // not in current path
+            else
+                e.classList.add("hide");
+        }
+        // Children maybe
+        else {
+            // no common path
+            if (ex < xmin || ex >= xmax) {
+                e.classList.add("hide");
+            }
+            else {
+                zoom_child(e, xmin, width);
+                to_update_text.push(e);
+            }
+        }
+    }
+    update_text_for_elements(to_update_text);
+}
+function unzoom() {
+    unzoombtn.classList.add("hide");
+    var el = frames.children;
+    for(var i = 0; i < el.length; i++) {
+        el[i].classList.remove("parent");
+        el[i].classList.remove("hide");
+        zoom_reset(el[i]);
+    }
+    update_text_for_elements(el);
+}
+// search
+function reset_search() {
+    var el = document.querySelectorAll("#frames rect");
+    for (var i = 0; i < el.length; i++) {
+        orig_load(el[i], "fill")
+    }
+    var params = get_params();
+    delete params.s;
+    history.replaceState(null, null, parse_params(params));
+}
+function search_prompt() {
+    if (!searching) {
+        var term = prompt("Enter a search term (regexp " +
+            "allowed, eg: ^ext4_)", "");
+        if (term != null) {
+            search(term)
+        }
+    } else {
+        reset_search();
+        searching = 0;
+        searchbtn.classList.remove("show");
+        searchbtn.firstChild.nodeValue = "Search"
+        matchedtxt.classList.add("hide");
+        matchedtxt.firstChild.nodeValue = ""
+    }
+}
+function search(term) {
+    var re = new RegExp(term);
+    var el = frames.children;
+    var matches = new Object();
+    var maxwidth = 0;
+    for (var i = 0; i < el.length; i++) {
+        var e = el[i];
+        // Skip over frames which are either not visible, or below the zoomed-to frame
+        if (e.classList.contains("hide") || e.classList.contains("parent")) {
+            continue;
+        }
+        var func = g_to_func(e);
+        var rect = find_child(e, "rect");
+        if (func == null || rect == null)
+            continue;
+        // Save max width. Only works as we have a root frame
+        var w = parseInt(rect.attributes["fg:w"].value);
+        if (w > maxwidth)
+            maxwidth = w;
+        if (func.match(re)) {
+            // highlight
+            var x = parseInt(rect.attributes["fg:x"].value);
+            orig_save(rect, "fill");
+            rect.attributes.fill.value = searchcolor;
+            // remember matches
+            if (matches[x] == undefined) {
+                matches[x] = w;
+            } else {
+                if (w > matches[x]) {
+                    // overwrite with parent
+                    matches[x] = w;
+                }
+            }
+            searching = 1;
+        }
+    }
+    if (!searching)
+        return;
+    var params = get_params();
+    params.s = term;
+    history.replaceState(null, null, parse_params(params));
+
+    searchbtn.classList.add("show");
+    searchbtn.firstChild.nodeValue = "Reset Search";
+    // calculate percent matched, excluding vertical overlap
+    var count = 0;
+    var lastx = -1;
+    var lastw = 0;
+    var keys = Array();
+    for (k in matches) {
+        if (matches.hasOwnProperty(k))
+            keys.push(k);
+    }
+    // sort the matched frames by their x location
+    // ascending, then width descending
+    keys.sort(function(a, b){
+        return a - b;
+    });
+    // Step through frames saving only the biggest bottom-up frames
+    // thanks to the sort order. This relies on the tree property
+    // where children are always smaller than their parents.
+    for (var k in keys) {
+        var x = parseInt(keys[k]);
+        var w = matches[keys[k]];
+        if (x >= lastx + lastw) {
+            count += w;
+            lastx = x;
+            lastw = w;
+        }
+    }
+    // display matched percent
+    matchedtxt.classList.remove("hide");
+    var pct = 100 * count / maxwidth;
+    if (pct != 100) pct = pct.toFixed(1);
+    matchedtxt.firstChild.nodeValue = "Matched: " + pct + "%";
+}
+function format_percent(n) {
+    return n.toFixed(4) + "%";
+}
+]]></script><rect x="0" y="0" width="100%" height="198" fill="url(#background)"/><text id="title" fill="rgb(0,0,0)" x="50.0000%" y="24.00">Execution &amp; IO</text><text id="details" fill="rgb(0,0,0)" x="10" y="181.00"> </text><text id="unzoom" class="hide" fill="rgb(0,0,0)" x="10" y="24.00">Reset Zoom</text><text id="search" fill="rgb(0,0,0)" x="1190" y="24.00">Search</text><text id="matched" fill="rgb(0,0,0)" x="1190" y="181.00"> </text><svg id="frames" x="10" width="1180" total_samples="180663590"><g><title>intrinsic (2.76 gas units, 1.53%)</title><rect x="0.0000%" y="133" width="1.5277%" height="15" fill="rgb(255,231,231)" fg:x="0" fg:w="2760000"/><text x="0.2500%" y="143.50"></text></g><g><title>0x2447..::kzg (0.121164 gas units, 0.07%)</title><rect x="1.5277%" y="117" width="0.0671%" height="15" fill="rgb(255,246,246)" fg:x="2760000" fg:w="121164"/><text x="1.7777%" y="127.50"></text></g><g><title>0x2447..::starknet_err (0.165936 gas units, 0.09%)</title><rect x="1.5948%" y="117" width="0.0918%" height="15" fill="rgb(255,245,245)" fg:x="2881164" fg:w="165936"/><text x="1.8448%" y="127.50"></text></g><g><title>dependencies (0.65535 gas units, 0.36%)</title><rect x="1.5277%" y="133" width="0.3627%" height="15" fill="rgb(255,241,241)" fg:x="2760000" fg:w="655350"/><text x="1.7777%" y="143.50"></text></g><g><title>0x2447..::trusted_setup (0.36825 gas units, 0.20%)</title><rect x="1.6866%" y="117" width="0.2038%" height="15" fill="rgb(255,243,243)" fg:x="3047100" fg:w="368250"/><text x="1.9366%" y="127.50"></text></g><g><title>load&lt;0x1::0x1::features::Features&gt; (0.920881 gas units, 0.51%)</title><rect x="1.8904%" y="53" width="0.5097%" height="15" fill="rgb(255,239,239)" fg:x="3415350" fg:w="920881"/><text x="2.1404%" y="63.50"></text></g><g><title>0x1::features::contains (0.019709 gas units, 0.01%)</title><rect x="2.4002%" y="53" width="0.0109%" height="15" fill="rgb(255,248,248)" fg:x="4336231" fg:w="19709"/><text x="2.6502%" y="63.50"></text></g><g><title>0x1::features::is_enabled (0.967175 gas units, 0.54%)</title><rect x="1.8904%" y="69" width="0.5353%" height="15" fill="rgb(255,239,239)" fg:x="3415350" fg:w="967175"/><text x="2.1404%" y="79.50"></text></g><g><title>0x1::features::cryptography_algebra_enabled (0.975985 gas units, 0.54%)</title><rect x="1.8904%" y="85" width="0.5402%" height="15" fill="rgb(255,239,239)" fg:x="3415350" fg:w="975985"/><text x="2.1404%" y="95.50"></text></g><g><title>0x1::crypto_algebra::abort_unless_cryptography_algebra_natives_enabled (0.980322 gas units, 0.54%)</title><rect x="1.8904%" y="101" width="0.5426%" height="15" fill="rgb(255,238,238)" fg:x="3415350" fg:w="980322"/><text x="2.1404%" y="111.50"></text></g><g><title>0x1::option::some&lt;0x1::crypto_algebra::Element&lt;0x1::bls12381_algebra::Fr&gt;&gt; (0.019724 gas units, 0.01%)</title><rect x="2.4346%" y="101" width="0.0109%" height="15" fill="rgb(255,248,248)" fg:x="4398436" fg:w="19724"/><text x="2.6846%" y="111.50"></text></g><g><title>0x1::crypto_algebra::deserialize&lt;0x1::bls12381_algebra::Fr,0x1::bls12381_algebra::FormatFrLsb&gt; (1.025755 gas units, 0.57%)</title><rect x="1.8904%" y="117" width="0.5678%" height="15" fill="rgb(255,238,238)" fg:x="3415350" fg:w="1025755"/><text x="2.1404%" y="127.50"></text></g><g><title>0x1::option::extract&lt;0x1::crypto_algebra::Element&lt;0x1::bls12381_algebra::Fr&gt;&gt; (0.03149 gas units, 0.02%)</title><rect x="2.4582%" y="117" width="0.0174%" height="15" fill="rgb(255,248,248)" fg:x="4441105" fg:w="31490"/><text x="2.7082%" y="127.50"></text></g><g><title>0x1::features::contains (0.019709 gas units, 0.01%)</title><rect x="2.4756%" y="53" width="0.0109%" height="15" fill="rgb(255,248,248)" fg:x="4472595" fg:w="19709"/><text x="2.7256%" y="63.50"></text></g><g><title>0x1::features::is_enabled (0.046294 gas units, 0.03%)</title><rect x="2.4756%" y="69" width="0.0256%" height="15" fill="rgb(255,247,247)" fg:x="4472595" fg:w="46294"/><text x="2.7256%" y="79.50"></text></g><g><title>0x1::features::cryptography_algebra_enabled (0.055104 gas units, 0.03%)</title><rect x="2.4756%" y="85" width="0.0305%" height="15" fill="rgb(255,247,247)" fg:x="4472595" fg:w="55104"/><text x="2.7256%" y="95.50"></text></g><g><title>0x1::crypto_algebra::abort_unless_cryptography_algebra_natives_enabled (0.059441 gas units, 0.03%)</title><rect x="2.4756%" y="101" width="0.0329%" height="15" fill="rgb(255,247,247)" fg:x="4472595" fg:w="59441"/><text x="2.7256%" y="111.50"></text></g><g><title>0x1::option::some&lt;0x1::crypto_algebra::Element&lt;0x1::bls12381_algebra::Fr&gt;&gt; (0.019724 gas units, 0.01%)</title><rect x="2.5101%" y="101" width="0.0109%" height="15" fill="rgb(255,248,248)" fg:x="4534800" fg:w="19724"/><text x="2.7601%" y="111.50"></text></g><g><title>0x1::crypto_algebra::deserialize&lt;0x1::bls12381_algebra::Fr,0x1::bls12381_algebra::FormatFrLsb&gt; (0.104874 gas units, 0.06%)</title><rect x="2.4756%" y="117" width="0.0580%" height="15" fill="rgb(255,246,246)" fg:x="4472595" fg:w="104874"/><text x="2.7256%" y="127.50"></text></g><g><title>0x1::option::extract&lt;0x1::crypto_algebra::Element&lt;0x1::bls12381_algebra::Fr&gt;&gt; (0.03149 gas units, 0.02%)</title><rect x="2.5337%" y="117" width="0.0174%" height="15" fill="rgb(255,248,248)" fg:x="4577469" fg:w="31490"/><text x="2.7837%" y="127.50"></text></g><g><title>0x1::features::contains (0.019709 gas units, 0.01%)</title><rect x="2.5511%" y="53" width="0.0109%" height="15" fill="rgb(255,248,248)" fg:x="4608959" fg:w="19709"/><text x="2.8011%" y="63.50"></text></g><g><title>0x1::features::is_enabled (0.046294 gas units, 0.03%)</title><rect x="2.5511%" y="69" width="0.0256%" height="15" fill="rgb(255,247,247)" fg:x="4608959" fg:w="46294"/><text x="2.8011%" y="79.50"></text></g><g><title>0x1::features::cryptography_algebra_enabled (0.055104 gas units, 0.03%)</title><rect x="2.5511%" y="85" width="0.0305%" height="15" fill="rgb(255,247,247)" fg:x="4608959" fg:w="55104"/><text x="2.8011%" y="95.50"></text></g><g><title>0x1::crypto_algebra::abort_unless_cryptography_algebra_natives_enabled (0.059441 gas units, 0.03%)</title><rect x="2.5511%" y="101" width="0.0329%" height="15" fill="rgb(255,247,247)" fg:x="4608959" fg:w="59441"/><text x="2.8011%" y="111.50"></text></g><g><title>0x1::crypto_algebra::deserialize_internal&lt;0x1::bls12381_algebra::G1,0x1::bls12381_algebra::FormatG1Compr&gt; (3.784805 gas units, 2.09%)</title><rect x="2.5840%" y="101" width="2.0949%" height="15" fill="rgb(255,228,228)" fg:x="4668400" fg:w="3784805"/><text x="2.8340%" y="111.50">0..</text></g><g><title>0x1::option::some&lt;0x1::crypto_algebra::Element&lt;0x1::bls12381_algebra::G1&gt;&gt; (0.019724 gas units, 0.01%)</title><rect x="4.6790%" y="101" width="0.0109%" height="15" fill="rgb(255,248,248)" fg:x="8453205" fg:w="19724"/><text x="4.9290%" y="111.50"></text></g><g><title>0x1::crypto_algebra::deserialize&lt;0x1::bls12381_algebra::G1,0x1::bls12381_algebra::FormatG1Compr&gt; (3.886915 gas units, 2.15%)</title><rect x="2.5511%" y="117" width="2.1515%" height="15" fill="rgb(255,228,228)" fg:x="4608959" fg:w="3886915"/><text x="2.8011%" y="127.50">0..</text></g><g><title>0x1::option::extract&lt;0x1::crypto_algebra::Element&lt;0x1::bls12381_algebra::G1&gt;&gt; (0.03149 gas units, 0.02%)</title><rect x="4.7026%" y="117" width="0.0174%" height="15" fill="rgb(255,248,248)" fg:x="8495874" fg:w="31490"/><text x="4.9526%" y="127.50"></text></g><g><title>0x1::features::contains (0.019709 gas units, 0.01%)</title><rect x="4.7200%" y="53" width="0.0109%" height="15" fill="rgb(255,248,248)" fg:x="8527364" fg:w="19709"/><text x="4.9700%" y="63.50"></text></g><g><title>0x1::features::is_enabled (0.046294 gas units, 0.03%)</title><rect x="4.7200%" y="69" width="0.0256%" height="15" fill="rgb(255,247,247)" fg:x="8527364" fg:w="46294"/><text x="4.9700%" y="79.50"></text></g><g><title>0x1::features::cryptography_algebra_enabled (0.055104 gas units, 0.03%)</title><rect x="4.7200%" y="85" width="0.0305%" height="15" fill="rgb(255,247,247)" fg:x="8527364" fg:w="55104"/><text x="4.9700%" y="95.50"></text></g><g><title>0x1::crypto_algebra::abort_unless_cryptography_algebra_natives_enabled (0.059441 gas units, 0.03%)</title><rect x="4.7200%" y="101" width="0.0329%" height="15" fill="rgb(255,247,247)" fg:x="8527364" fg:w="59441"/><text x="4.9700%" y="111.50"></text></g><g><title>0x1::crypto_algebra::deserialize_internal&lt;0x1::bls12381_algebra::G1,0x1::bls12381_algebra::FormatG1Compr&gt; (3.784805 gas units, 2.09%)</title><rect x="4.7529%" y="101" width="2.0949%" height="15" fill="rgb(255,228,228)" fg:x="8586805" fg:w="3784805"/><text x="5.0029%" y="111.50">0..</text></g><g><title>0x1::option::some&lt;0x1::crypto_algebra::Element&lt;0x1::bls12381_algebra::G1&gt;&gt; (0.019724 gas units, 0.01%)</title><rect x="6.8479%" y="101" width="0.0109%" height="15" fill="rgb(255,248,248)" fg:x="12371610" fg:w="19724"/><text x="7.0979%" y="111.50"></text></g><g><title>0x1::crypto_algebra::deserialize&lt;0x1::bls12381_algebra::G1,0x1::bls12381_algebra::FormatG1Compr&gt; (3.886915 gas units, 2.15%)</title><rect x="4.7200%" y="117" width="2.1515%" height="15" fill="rgb(255,228,228)" fg:x="8527364" fg:w="3886915"/><text x="4.9700%" y="127.50">0..</text></g><g><title>0x1::option::extract&lt;0x1::crypto_algebra::Element&lt;0x1::bls12381_algebra::G1&gt;&gt; (0.03149 gas units, 0.02%)</title><rect x="6.8715%" y="117" width="0.0174%" height="15" fill="rgb(255,248,248)" fg:x="12414279" fg:w="31490"/><text x="7.1215%" y="127.50"></text></g><g><title>0x1::features::contains (0.019709 gas units, 0.01%)</title><rect x="6.8889%" y="37" width="0.0109%" height="15" fill="rgb(255,248,248)" fg:x="12445769" fg:w="19709"/><text x="7.1389%" y="47.50"></text></g><g><title>0x1::features::is_enabled (0.046294 gas units, 0.03%)</title><rect x="6.8889%" y="53" width="0.0256%" height="15" fill="rgb(255,247,247)" fg:x="12445769" fg:w="46294"/><text x="7.1389%" y="63.50"></text></g><g><title>0x1::features::cryptography_algebra_enabled (0.055104 gas units, 0.03%)</title><rect x="6.8889%" y="69" width="0.0305%" height="15" fill="rgb(255,247,247)" fg:x="12445769" fg:w="55104"/><text x="7.1389%" y="79.50"></text></g><g><title>0x1::crypto_algebra::abort_unless_cryptography_algebra_natives_enabled (0.059441 gas units, 0.03%)</title><rect x="6.8889%" y="85" width="0.0329%" height="15" fill="rgb(255,247,247)" fg:x="12445769" fg:w="59441"/><text x="7.1389%" y="95.50"></text></g><g><title>0x1::crypto_algebra::deserialize_internal&lt;0x1::bls12381_algebra::G2,0x1::bls12381_algebra::FormatG2Compr&gt; (7.572809 gas units, 4.19%)</title><rect x="6.9218%" y="85" width="4.1917%" height="15" fill="rgb(255,219,219)" fg:x="12505210" fg:w="7572809"/><text x="7.1718%" y="95.50">0x1::..</text></g><g><title>0x1::option::some&lt;0x1::crypto_algebra::Element&lt;0x1::bls12381_algebra::G2&gt;&gt; (0.019724 gas units, 0.01%)</title><rect x="11.1135%" y="85" width="0.0109%" height="15" fill="rgb(255,248,248)" fg:x="20078019" fg:w="19724"/><text x="11.3635%" y="95.50"></text></g><g><title>0x1::crypto_algebra::deserialize&lt;0x1::bls12381_algebra::G2,0x1::bls12381_algebra::FormatG2Compr&gt; (7.674919 gas units, 4.25%)</title><rect x="6.8889%" y="101" width="4.2482%" height="15" fill="rgb(255,219,219)" fg:x="12445769" fg:w="7674919"/><text x="7.1389%" y="111.50">0x1::..</text></g><g><title>0x1::option::extract&lt;0x1::crypto_algebra::Element&lt;0x1::bls12381_algebra::G2&gt;&gt; (0.03149 gas units, 0.02%)</title><rect x="11.1371%" y="101" width="0.0174%" height="15" fill="rgb(255,248,248)" fg:x="20120688" fg:w="31490"/><text x="11.3871%" y="111.50"></text></g><g><title>0x2447..::trusted_setup::get_g2s (7.737811 gas units, 4.28%)</title><rect x="6.8889%" y="117" width="4.2830%" height="15" fill="rgb(255,219,219)" fg:x="12445769" fg:w="7737811"/><text x="7.1389%" y="127.50">0x244..</text></g><g><title>0x1::features::contains (0.019709 gas units, 0.01%)</title><rect x="11.1719%" y="37" width="0.0109%" height="15" fill="rgb(255,248,248)" fg:x="20183580" fg:w="19709"/><text x="11.4219%" y="47.50"></text></g><g><title>0x1::features::is_enabled (0.046294 gas units, 0.03%)</title><rect x="11.1719%" y="53" width="0.0256%" height="15" fill="rgb(255,247,247)" fg:x="20183580" fg:w="46294"/><text x="11.4219%" y="63.50"></text></g><g><title>0x1::features::cryptography_algebra_enabled (0.055104 gas units, 0.03%)</title><rect x="11.1719%" y="69" width="0.0305%" height="15" fill="rgb(255,247,247)" fg:x="20183580" fg:w="55104"/><text x="11.4219%" y="79.50"></text></g><g><title>0x1::crypto_algebra::abort_unless_cryptography_algebra_natives_enabled (0.059441 gas units, 0.03%)</title><rect x="11.1719%" y="85" width="0.0329%" height="15" fill="rgb(255,247,247)" fg:x="20183580" fg:w="59441"/><text x="11.4219%" y="95.50"></text></g><g><title>0x1::crypto_algebra::deserialize_internal&lt;0x1::bls12381_algebra::G2,0x1::bls12381_algebra::FormatG2Compr&gt; (7.572809 gas units, 4.19%)</title><rect x="11.2048%" y="85" width="4.1917%" height="15" fill="rgb(255,219,219)" fg:x="20243021" fg:w="7572809"/><text x="11.4548%" y="95.50">0x1::..</text></g><g><title>0x1::option::some&lt;0x1::crypto_algebra::Element&lt;0x1::bls12381_algebra::G2&gt;&gt; (0.019724 gas units, 0.01%)</title><rect x="15.3965%" y="85" width="0.0109%" height="15" fill="rgb(255,248,248)" fg:x="27815830" fg:w="19724"/><text x="15.6465%" y="95.50"></text></g><g><title>0x1::crypto_algebra::deserialize&lt;0x1::bls12381_algebra::G2,0x1::bls12381_algebra::FormatG2Compr&gt; (7.674919 gas units, 4.25%)</title><rect x="11.1719%" y="101" width="4.2482%" height="15" fill="rgb(255,219,219)" fg:x="20183580" fg:w="7674919"/><text x="11.4219%" y="111.50">0x1::..</text></g><g><title>0x1::option::extract&lt;0x1::crypto_algebra::Element&lt;0x1::bls12381_algebra::G2&gt;&gt; (0.03149 gas units, 0.02%)</title><rect x="15.4201%" y="101" width="0.0174%" height="15" fill="rgb(255,248,248)" fg:x="27858499" fg:w="31490"/><text x="15.6701%" y="111.50"></text></g><g><title>0x2447..::trusted_setup::get_g2 (7.737811 gas units, 4.28%)</title><rect x="11.1719%" y="117" width="4.2830%" height="15" fill="rgb(255,219,219)" fg:x="20183580" fg:w="7737811"/><text x="11.4219%" y="127.50">0x244..</text></g><g><title>0x1::features::contains (0.019709 gas units, 0.01%)</title><rect x="15.4549%" y="53" width="0.0109%" height="15" fill="rgb(255,248,248)" fg:x="27921391" fg:w="19709"/><text x="15.7049%" y="63.50"></text></g><g><title>0x1::features::is_enabled (0.046294 gas units, 0.03%)</title><rect x="15.4549%" y="69" width="0.0256%" height="15" fill="rgb(255,247,247)" fg:x="27921391" fg:w="46294"/><text x="15.7049%" y="79.50"></text></g><g><title>0x1::features::cryptography_algebra_enabled (0.055104 gas units, 0.03%)</title><rect x="15.4549%" y="85" width="0.0305%" height="15" fill="rgb(255,247,247)" fg:x="27921391" fg:w="55104"/><text x="15.7049%" y="95.50"></text></g><g><title>0x1::crypto_algebra::abort_unless_cryptography_algebra_natives_enabled (0.059441 gas units, 0.03%)</title><rect x="15.4549%" y="101" width="0.0329%" height="15" fill="rgb(255,247,247)" fg:x="27921391" fg:w="59441"/><text x="15.7049%" y="111.50"></text></g><g><title>0x1::crypto_algebra::scalar_mul_internal&lt;0x1::bls12381_algebra::G2,0x1::bls12381_algebra::Fr&gt; (27.667443 gas units, 15.31%)</title><rect x="15.4878%" y="101" width="15.3143%" height="15" fill="rgb(255,191,191)" fg:x="27980832" fg:w="27667443"/><text x="15.7378%" y="111.50">0x1::crypto_algebra::sc..</text></g><g><title>0x1::crypto_algebra::scalar_mul&lt;0x1::bls12381_algebra::G2,0x1::bls12381_algebra::Fr&gt; (27.748621 gas units, 15.36%)</title><rect x="15.4549%" y="117" width="15.3593%" height="15" fill="rgb(255,191,191)" fg:x="27921391" fg:w="27748621"/><text x="15.7049%" y="127.50">0x1::crypto_algebra::sca..</text></g><g><title>0x1::features::contains (0.019709 gas units, 0.01%)</title><rect x="30.8142%" y="53" width="0.0109%" height="15" fill="rgb(255,248,248)" fg:x="55670012" fg:w="19709"/><text x="31.0642%" y="63.50"></text></g><g><title>0x1::features::is_enabled (0.046294 gas units, 0.03%)</title><rect x="30.8142%" y="69" width="0.0256%" height="15" fill="rgb(255,247,247)" fg:x="55670012" fg:w="46294"/><text x="31.0642%" y="79.50"></text></g><g><title>0x1::features::cryptography_algebra_enabled (0.055104 gas units, 0.03%)</title><rect x="30.8142%" y="85" width="0.0305%" height="15" fill="rgb(255,247,247)" fg:x="55670012" fg:w="55104"/><text x="31.0642%" y="95.50"></text></g><g><title>0x1::crypto_algebra::abort_unless_cryptography_algebra_natives_enabled (0.059441 gas units, 0.03%)</title><rect x="30.8142%" y="101" width="0.0329%" height="15" fill="rgb(255,247,247)" fg:x="55670012" fg:w="59441"/><text x="31.0642%" y="111.50"></text></g><g><title>0x1::crypto_algebra::sub_internal&lt;0x1::bls12381_algebra::G2&gt; (0.120826 gas units, 0.07%)</title><rect x="30.8471%" y="101" width="0.0669%" height="15" fill="rgb(255,246,246)" fg:x="55729453" fg:w="120826"/><text x="31.0971%" y="111.50"></text></g><g><title>0x1::crypto_algebra::sub&lt;0x1::bls12381_algebra::G2&gt; (0.201237 gas units, 0.11%)</title><rect x="30.8142%" y="117" width="0.1114%" height="15" fill="rgb(255,245,245)" fg:x="55670012" fg:w="201237"/><text x="31.0642%" y="127.50"></text></g><g><title>0x1::features::contains (0.019709 gas units, 0.01%)</title><rect x="30.9256%" y="37" width="0.0109%" height="15" fill="rgb(255,248,248)" fg:x="55871249" fg:w="19709"/><text x="31.1756%" y="47.50"></text></g><g><title>0x1::features::is_enabled (0.046294 gas units, 0.03%)</title><rect x="30.9256%" y="53" width="0.0256%" height="15" fill="rgb(255,247,247)" fg:x="55871249" fg:w="46294"/><text x="31.1756%" y="63.50"></text></g><g><title>0x1::features::cryptography_algebra_enabled (0.055104 gas units, 0.03%)</title><rect x="30.9256%" y="69" width="0.0305%" height="15" fill="rgb(255,247,247)" fg:x="55871249" fg:w="55104"/><text x="31.1756%" y="79.50"></text></g><g><title>0x1::crypto_algebra::abort_unless_cryptography_algebra_natives_enabled (0.059441 gas units, 0.03%)</title><rect x="30.9256%" y="85" width="0.0329%" height="15" fill="rgb(255,247,247)" fg:x="55871249" fg:w="59441"/><text x="31.1756%" y="95.50"></text></g><g><title>0x1::crypto_algebra::deserialize_internal&lt;0x1::bls12381_algebra::G1,0x1::bls12381_algebra::FormatG1Compr&gt; (3.784805 gas units, 2.09%)</title><rect x="30.9585%" y="85" width="2.0949%" height="15" fill="rgb(255,228,228)" fg:x="55930690" fg:w="3784805"/><text x="31.2085%" y="95.50">0..</text></g><g><title>0x1::option::some&lt;0x1::crypto_algebra::Element&lt;0x1::bls12381_algebra::G1&gt;&gt; (0.019724 gas units, 0.01%)</title><rect x="33.0534%" y="85" width="0.0109%" height="15" fill="rgb(255,248,248)" fg:x="59715495" fg:w="19724"/><text x="33.3034%" y="95.50"></text></g><g><title>0x1::crypto_algebra::deserialize&lt;0x1::bls12381_algebra::G1,0x1::bls12381_algebra::FormatG1Compr&gt; (3.886915 gas units, 2.15%)</title><rect x="30.9256%" y="101" width="2.1515%" height="15" fill="rgb(255,228,228)" fg:x="55871249" fg:w="3886915"/><text x="31.1756%" y="111.50">0..</text></g><g><title>0x1::option::extract&lt;0x1::crypto_algebra::Element&lt;0x1::bls12381_algebra::G1&gt;&gt; (0.03149 gas units, 0.02%)</title><rect x="33.0770%" y="101" width="0.0174%" height="15" fill="rgb(255,248,248)" fg:x="59758164" fg:w="31490"/><text x="33.3270%" y="111.50"></text></g><g><title>0x2447..::trusted_setup::get_g1_generator (3.943663 gas units, 2.18%)</title><rect x="30.9256%" y="117" width="2.1829%" height="15" fill="rgb(255,227,227)" fg:x="55871249" fg:w="3943663"/><text x="31.1756%" y="127.50">0..</text></g><g><title>0x1::features::contains (0.019709 gas units, 0.01%)</title><rect x="33.1084%" y="53" width="0.0109%" height="15" fill="rgb(255,248,248)" fg:x="59814912" fg:w="19709"/><text x="33.3584%" y="63.50"></text></g><g><title>0x1::features::is_enabled (0.046294 gas units, 0.03%)</title><rect x="33.1084%" y="69" width="0.0256%" height="15" fill="rgb(255,247,247)" fg:x="59814912" fg:w="46294"/><text x="33.3584%" y="79.50"></text></g><g><title>0x1::features::cryptography_algebra_enabled (0.055104 gas units, 0.03%)</title><rect x="33.1084%" y="85" width="0.0305%" height="15" fill="rgb(255,247,247)" fg:x="59814912" fg:w="55104"/><text x="33.3584%" y="95.50"></text></g><g><title>0x1::crypto_algebra::abort_unless_cryptography_algebra_natives_enabled (0.059441 gas units, 0.03%)</title><rect x="33.1084%" y="101" width="0.0329%" height="15" fill="rgb(255,247,247)" fg:x="59814912" fg:w="59441"/><text x="33.3584%" y="111.50"></text></g><g><title>0x1::crypto_algebra::scalar_mul_internal&lt;0x1::bls12381_algebra::G1,0x1::bls12381_algebra::Fr&gt; (9.276463 gas units, 5.13%)</title><rect x="33.1414%" y="101" width="5.1347%" height="15" fill="rgb(255,216,216)" fg:x="59874353" fg:w="9276463"/><text x="33.3914%" y="111.50">0x1::c..</text></g><g><title>0x1::crypto_algebra::scalar_mul&lt;0x1::bls12381_algebra::G1,0x1::bls12381_algebra::Fr&gt; (9.357641 gas units, 5.18%)</title><rect x="33.1084%" y="117" width="5.1796%" height="15" fill="rgb(255,215,215)" fg:x="59814912" fg:w="9357641"/><text x="33.3584%" y="127.50">0x1::c..</text></g><g><title>0x1::features::contains (0.019709 gas units, 0.01%)</title><rect x="38.2880%" y="53" width="0.0109%" height="15" fill="rgb(255,248,248)" fg:x="69172553" fg:w="19709"/><text x="38.5380%" y="63.50"></text></g><g><title>0x1::features::is_enabled (0.046294 gas units, 0.03%)</title><rect x="38.2880%" y="69" width="0.0256%" height="15" fill="rgb(255,247,247)" fg:x="69172553" fg:w="46294"/><text x="38.5380%" y="79.50"></text></g><g><title>0x1::features::cryptography_algebra_enabled (0.055104 gas units, 0.03%)</title><rect x="38.2880%" y="85" width="0.0305%" height="15" fill="rgb(255,247,247)" fg:x="69172553" fg:w="55104"/><text x="38.5380%" y="95.50"></text></g><g><title>0x1::crypto_algebra::abort_unless_cryptography_algebra_natives_enabled (0.059441 gas units, 0.03%)</title><rect x="38.2880%" y="101" width="0.0329%" height="15" fill="rgb(255,247,247)" fg:x="69172553" fg:w="59441"/><text x="38.5380%" y="111.50"></text></g><g><title>0x1::crypto_algebra::sub_internal&lt;0x1::bls12381_algebra::G1&gt; (0.040976 gas units, 0.02%)</title><rect x="38.3209%" y="101" width="0.0227%" height="15" fill="rgb(255,247,247)" fg:x="69231994" fg:w="40976"/><text x="38.5709%" y="111.50"></text></g><g><title>0x1::crypto_algebra::sub&lt;0x1::bls12381_algebra::G1&gt; (0.121387 gas units, 0.07%)</title><rect x="38.2880%" y="117" width="0.0672%" height="15" fill="rgb(255,246,246)" fg:x="69172553" fg:w="121387"/><text x="38.5380%" y="127.50"></text></g><g><title>0x1::features::contains (0.019709 gas units, 0.01%)</title><rect x="38.3552%" y="53" width="0.0109%" height="15" fill="rgb(255,248,248)" fg:x="69293940" fg:w="19709"/><text x="38.6052%" y="63.50"></text></g><g><title>0x1::features::is_enabled (0.046294 gas units, 0.03%)</title><rect x="38.3552%" y="69" width="0.0256%" height="15" fill="rgb(255,247,247)" fg:x="69293940" fg:w="46294"/><text x="38.6052%" y="79.50"></text></g><g><title>0x1::features::cryptography_algebra_enabled (0.055104 gas units, 0.03%)</title><rect x="38.3552%" y="85" width="0.0305%" height="15" fill="rgb(255,247,247)" fg:x="69293940" fg:w="55104"/><text x="38.6052%" y="95.50"></text></g><g><title>0x1::crypto_algebra::abort_unless_cryptography_algebra_natives_enabled (0.059441 gas units, 0.03%)</title><rect x="38.3552%" y="101" width="0.0329%" height="15" fill="rgb(255,247,247)" fg:x="69293940" fg:w="59441"/><text x="38.6052%" y="111.50"></text></g><g><title>0x1::crypto_algebra::pairing_internal&lt;0x1::bls12381_algebra::G1,0x1::bls12381_algebra::G2,0x1::bls12381_algebra::Gt&gt; (55.441842 gas units, 30.69%)</title><rect x="38.3881%" y="101" width="30.6879%" height="15" fill="rgb(255,166,166)" fg:x="69353381" fg:w="55441842"/><text x="38.6381%" y="111.50">0x1::crypto_algebra::pairing_internal&lt;0x1::bls1238..</text></g><g><title>0x1::features::contains (0.019709 gas units, 0.01%)</title><rect x="69.0885%" y="53" width="0.0109%" height="15" fill="rgb(255,248,248)" fg:x="124817727" fg:w="19709"/><text x="69.3385%" y="63.50"></text></g><g><title>0x1::features::is_enabled (0.046294 gas units, 0.03%)</title><rect x="69.0885%" y="69" width="0.0256%" height="15" fill="rgb(255,247,247)" fg:x="124817727" fg:w="46294"/><text x="69.3385%" y="79.50"></text></g><g><title>0x1::features::cryptography_algebra_enabled (0.055104 gas units, 0.03%)</title><rect x="69.0885%" y="85" width="0.0305%" height="15" fill="rgb(255,247,247)" fg:x="124817727" fg:w="55104"/><text x="69.3385%" y="95.50"></text></g><g><title>0x1::crypto_algebra::abort_unless_cryptography_algebra_natives_enabled (0.059441 gas units, 0.03%)</title><rect x="69.0885%" y="101" width="0.0329%" height="15" fill="rgb(255,247,247)" fg:x="124817727" fg:w="59441"/><text x="69.3385%" y="111.50"></text></g><g><title>0x1::crypto_algebra::pairing_internal&lt;0x1::bls12381_algebra::G1,0x1::bls12381_algebra::G2,0x1::bls12381_algebra::Gt&gt; (55.441842 gas units, 30.69%)</title><rect x="69.1214%" y="101" width="30.6879%" height="15" fill="rgb(255,166,166)" fg:x="124877168" fg:w="55441842"/><text x="69.3714%" y="111.50">0x1::crypto_algebra::pairing_internal&lt;0x1::bls1238..</text></g><g><title>0x1::crypto_algebra::pairing&lt;0x1::bls12381_algebra::G1,0x1::bls12381_algebra::G2,0x1::bls12381_algebra::Gt&gt; (111.047574 gas units, 61.47%)</title><rect x="38.3552%" y="117" width="61.4665%" height="15" fill="rgb(255,132,132)" fg:x="69293940" fg:w="111047574"/><text x="38.6052%" y="127.50">0x1::crypto_algebra::pairing&lt;0x1::bls12381_algebra::G1,0x1::bls12381_algebra::G2,0x1::bls12381_algebra..</text></g><g><title>0x1::features::contains (0.019709 gas units, 0.01%)</title><rect x="99.8217%" y="53" width="0.0109%" height="15" fill="rgb(255,248,248)" fg:x="180341514" fg:w="19709"/><text x="100.0717%" y="63.50"></text></g><g><title>0x1::features::is_enabled (0.046294 gas units, 0.03%)</title><rect x="99.8217%" y="69" width="0.0256%" height="15" fill="rgb(255,247,247)" fg:x="180341514" fg:w="46294"/><text x="100.0717%" y="79.50"></text></g><g><title>0x1::features::cryptography_algebra_enabled (0.055104 gas units, 0.03%)</title><rect x="99.8217%" y="85" width="0.0305%" height="15" fill="rgb(255,247,247)" fg:x="180341514" fg:w="55104"/><text x="100.0717%" y="95.50"></text></g><g><title>0x1::crypto_algebra::abort_unless_cryptography_algebra_natives_enabled (0.059441 gas units, 0.03%)</title><rect x="99.8217%" y="101" width="0.0329%" height="15" fill="rgb(255,247,247)" fg:x="180341514" fg:w="59441"/><text x="100.0717%" y="111.50"></text></g><g><title>0x1::crypto_algebra::eq&lt;0x1::bls12381_algebra::Gt&gt; (0.080924 gas units, 0.04%)</title><rect x="99.8217%" y="117" width="0.0448%" height="15" fill="rgb(255,246,246)" fg:x="180341514" fg:w="80924"/><text x="100.0717%" y="127.50"></text></g><g><title>0x1::event::write_module_event_to_store&lt;0x244701fb94617a6c5c59ebf7b0315ebed25cd070819c777a5d437447499afcb8::kzg::KZGProofVerification&gt; (0.024886 gas units, 0.01%)</title><rect x="99.8665%" y="101" width="0.0138%" height="15" fill="rgb(255,248,248)" fg:x="180422438" fg:w="24886"/><text x="100.1165%" y="111.50"></text></g><g><title>0x1::event::emit&lt;0x244701fb94617a6c5c59ebf7b0315ebed25cd070819c777a5d437447499afcb8::kzg::KZGProofVerification&gt; (0.030757 gas units, 0.02%)</title><rect x="99.8665%" y="117" width="0.0170%" height="15" fill="rgb(255,248,248)" fg:x="180422438" fg:w="30757"/><text x="100.1165%" y="127.50"></text></g><g><title>0x2447..::kzg::verify_kzg_proof (177.217179 gas units, 98.09%)</title><rect x="1.8904%" y="133" width="98.0924%" height="15" fill="rgb(255,101,101)" fg:x="3415350" fg:w="177217179"/><text x="2.1404%" y="143.50">0x2447..::kzg::verify_kzg_proof</text></g><g><title>transaction (0.025721 gas units, 0.01%)</title><rect x="99.9828%" y="117" width="0.0142%" height="15" fill="rgb(255,248,248)" fg:x="180632529" fg:w="25721"/><text x="100.2328%" y="127.50"></text></g><g><title>all (180.66359 gas units, 100%)</title><rect x="0.0000%" y="149" width="100.0000%" height="15" fill="rgb(255,100,100)" fg:x="0" fg:w="180663590"/><text x="0.2500%" y="159.50"></text></g><g><title>ledger_writes (0.031061 gas units, 0.02%)</title><rect x="99.9828%" y="133" width="0.0172%" height="15" fill="rgb(255,248,248)" fg:x="180632529" fg:w="31061"/><text x="100.2328%" y="143.50"></text></g></svg></svg>

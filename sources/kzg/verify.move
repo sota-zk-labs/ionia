@@ -2,6 +2,7 @@ module starknet_addr::kzg {
     use std::vector;
     use aptos_std::bls12381_algebra::{FormatFrLsb, FormatG1Compr, Fr, G1, G2, Gt};
     use aptos_std::crypto_algebra::{deserialize, eq, pairing, scalar_mul, sub};
+    use aptos_framework::event::emit;
 
     use starknet_addr::starknet_err;
     use starknet_addr::trusted_setup;
@@ -10,12 +11,17 @@ module starknet_addr::kzg {
     const BYTES_PER_FIELD_ELEMENT: u64 = 32;
     const BYTES_PER_PROOF: u64 = 48;
 
-    public fun verify_kzg_proof(
+    #[event]
+    struct KZGProofVerification has store, drop {
+        success: bool,
+    }
+
+    public entry fun verify_kzg_proof(
         commitment_bytes: vector<u8>,
         z: vector<u8>,
         y: vector<u8>,
         proof_bytes: vector<u8>,
-    ): bool {
+    ) {
         assert!(
             vector::length(&commitment_bytes) == BYTES_PER_COMMITMENT,
             starknet_err::err_invalid_kzg_commitment()
@@ -47,8 +53,9 @@ module starknet_addr::kzg {
 
         let lhs = pairing<G1, G2, Gt>(&field_proof, &a);
         let rhs = pairing<G1, G2, Gt>(&b, &g2);
-
-        eq(&lhs, &rhs)
+        emit<KZGProofVerification>(KZGProofVerification {
+            success: eq(&lhs, &rhs)
+        });
     }
 
     #[test]
@@ -57,7 +64,6 @@ module starknet_addr::kzg {
         let z_bytes = x"0400000000000000000000000000000000000000000000000000000000000000";
         let y_bytes = x"5100000000000000000000000000000000000000000000000000000000000000";
         let proof = x"85d5c5ddc49c8b44bace634bed4dd1c2f3ddc5982b459f702a7756e8896b8f29ae5db9c933ccbb9241af9c01587f3896";
-
         assert!(
             verify_kzg_proof(comitment, z_bytes, y_bytes, proof),
             1

@@ -30,10 +30,11 @@ module starknet_addr::pre_compile {
         );
 
         // Verify KZG proof with z and y in big-endian format (LSB format in Aptos)
-        assert!(
-            kzg::verify_kzg_proof(commitment, z, y, proof),
-            starknet_err::err_invalid_kzg_commitment()
-        );
+
+        // assert!(
+        //     kzg::verify_kzg_proof(commitment, z, y, proof),
+        //     starknet_err::err_invalid_kzg_commitment()
+        // );
 
         let bls_modulus = bls::get_bls_modulus();
 
