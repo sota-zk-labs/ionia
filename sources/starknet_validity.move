@@ -3,11 +3,11 @@ module starknet_addr::starknet_validity {
     use std::bcs;
     use std::vector;
     use aptos_std::aptos_hash::keccak256;
-    use aptos_std::debug;
     use aptos_framework::event;
 
-    use starknet_addr::bytes::{num_to_bytes_be, to_bytes_24_be};
+    use starknet_addr::bytes::{num_to_bytes_be, to_bytes_24_be, vec_to_bytes_be};
     use starknet_addr::fact_registry;
+    use starknet_addr::kzg_helper;
     use starknet_addr::onchain_data_fact_tree_encoded as onchain_data_fact;
     use starknet_addr::pre_compile;
     use starknet_addr::starknet_err;
@@ -49,7 +49,6 @@ module starknet_addr::starknet_validity {
     // The hash of the StarkNet config
     const CONFIG_HASH_TAG: vector<u8> = b"STARKNET_1.0_STARKNET_CONFIG_HASH";
 
-    const POINT_EVALUATION_PRECOMPILE_OUTPUT: vector<u8> = x"b2157d3a40131b14c4c675335465dffde802f0ce5218ad012284d7f275d1b37c";
     const PROOF_BYTES_LENGTH: u256 = 48;
 
 
@@ -165,8 +164,7 @@ module starknet_addr::starknet_validity {
         let kzg_segment = vector::slice(&pre_kzg_segment, 0u64, starknet_output::get_kzg_segment_size());
         verify_kzg_proof(&kzg_segment, &kzg_proof);
 
-        let state_transition_fact = keccak256(bcs::to_bytes(&program_output));
-        debug::print(&state_transition_fact);
+        let state_transition_fact = keccak256(vec_to_bytes_be(&program_output));
         update_state_internal(&program_output, state_transition_fact);
 
         // Re-entrancy protection: validate final block number
@@ -189,7 +187,7 @@ module starknet_addr::starknet_validity {
             starknet_err::err_invalid_kzg_proof_size()
         );
 
-        let blob_hash: vector<u8> = x"0000000000000000000000000000000030946f3d87c8396d89c9bcf81ff3f232";
+        let blob_hash: vector<u8> = get_blob_hash();
 
         // TODO: Write a get_blobhash(index) return the versioned hash version of blob index t-th
         // assert!(
@@ -239,50 +237,61 @@ module starknet_addr::starknet_validity {
         assert!(ok, starknet_err::err_point_evaluation_precompile_call_failed());
 
         assert!(
-            keccak256(precompile_output) == POINT_EVALUATION_PRECOMPILE_OUTPUT,
+            keccak256(precompile_output) == kzg_helper::get_point_evaluation_precompile_output(),
             starknet_err::err_unexpected_point_evaluation_precompile_output()
         );
     }
 
-    // #[test(s = @starknet_addr)]
-    // fun test_update_state_kzg_da(s: &signer) {
-    //     let state = starknet_state::new(0, 0, 0);
-    //
-    //     starknet_storage::initialize(
-    //         s,
-    //         1865367024509426979036104162713508294334262484507712987283009063059134893433,
-    //         @starknet_addr,
-    //         1553709454334774815764988612122634988906525555606597726644370513828557599647,
-    //         state
-    //     );
-    //
-    //     let program_output: vector<u256> = vector[
-    //         2624495537743027597317971413655252110020834612827084833271773726863892158624,
-    //         1518367200064081803680226907302538101202884873406076021112221967874915088145,
-    //         663431,
-    //         2519277086832679430044243670722131833880392874732106984033502911367536922509,
-    //         2590421891839256512113614983194993186457498815986333310670788206383913888162,
-    //         1,
-    //         3599416175753320398983393619113548553286501362553103395308,
-    //         4155295208113501251616340107677977620218240196840682461552,
-    //         767379359787008064110421700070180377135058496841271215821598844962655746136,
-    //         178669605765425549635792566257888423470,
-    //         64573659955145567779264716045548778034,
-    //         8,
-    //         1664015738346703719092667845204826968002822652638997199367526143920141278968,
-    //         1298815730822278902934766636815198998626615520107,
-    //         5,
-    //         1056821354461963493869604920442253899646534182978,
-    //         785016880065820721037654191378140574206732777048,
-    //         58373382721912932178140442381368767362441948891759404896140321857349706904,
-    //         2859039056179775280844,
-    //         0,
-    //         0
-    //     ];
-    //     let kzg_proof: vector<u8> = x"b069a1cd9573be2387183d5cac41659a3d20d3a1091c5489421dd599cd032b9b5cd89ac4fcdad4ce4aea9a7f6934c2af";
-    //
-    //     update_state_kzg_da(program_output, kzg_proof);
-    // }
+    public fun get_blob_hash(): vector<u8> {
+        x"010b37b597b57e4c7d3df9c81ceb00130e2cca57679e6ddae2144503c5f751a1"
+    }
+
+    #[test(s = @starknet_addr)]
+    fun test_update_state_kzg_da(s: &signer) {
+        let state = starknet_state::new(
+            1140305933455702090030976682007678821560814182066058788699329257003131568320,
+            663730,
+            0
+        );
+
+        starknet_storage::initialize(
+            s,
+            1865367024509426979036104162713508294334262484507712987283009063059134893433,
+            @starknet_addr,
+            2590421891839256512113614983194993186457498815986333310670788206383913888162,
+            state
+        );
+
+        let program_output: vector<u256> = vector[
+            1140305933455702090030976682007678821560814182066058788699329257003131568320,
+            2564087571168869030849741453167808611635007296011392663568683807641455099416,
+            663731,
+            1537006764759948130436448467054129621068903866332413870731059124996705590800,
+            2590421891839256512113614983194993186457498815986333310670788206383913888162,
+            1,
+            5495246417610986281159676219993690967067612120205267783816,
+            3761087859177836140573657651666911802410811047530211431325,
+            2609772038065995024432088513112532882720771352701829745873416390305542106921,
+            94771607049779468086511148776901632421,
+            36434806342950337696864723428487729449,
+            8,
+            3256441166037631918262930812410838598500200462657642943867372734773841898370,
+            993696174272377493693496825928908586134624850969,
+            5,
+            0,
+            259250955146465173507305340095009695073789544843,
+            4543560,
+            4136982361299020,
+            0,
+            0
+        ];
+
+        fact_registry::register_fact(s, x"af6d61465fa108b0e7d4d9bef635dec868bcfa8e9fa14c5486c6017cd552fd4c");
+
+        let kzg_proof: vector<u8> = x"8664b3057bc3aefaf110db484fdc0c422c58209c7f8a331a4c5f853a9e37d0de5f02ec0289d7d0634e49ef813fb8e84d";
+
+        update_state_kzg_da(program_output, kzg_proof);
+    }
 
     #[test(s = @starknet_addr)]
     fun test_update_state(s: &signer) {
