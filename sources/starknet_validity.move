@@ -286,6 +286,9 @@ module starknet_addr::starknet_validity {
             0
         ];
 
+        // This test depends on the value of `fact`, which is precomputed and registered before updating the state.
+        // All test data is taken from transaction 0xe76c6accacbcedb7f66d5dc3f1a3e189d4e4d194ea88c19ee29955adbc902362.
+
         fact_registry::register_fact(s, x"af6d61465fa108b0e7d4d9bef635dec868bcfa8e9fa14c5486c6017cd552fd4c");
 
         let kzg_proof: vector<u8> = x"8664b3057bc3aefaf110db484fdc0c422c58209c7f8a331a4c5f853a9e37d0de5f02ec0289d7d0634e49ef813fb8e84d";

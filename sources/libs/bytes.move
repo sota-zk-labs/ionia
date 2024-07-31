@@ -2,7 +2,7 @@
 module starknet_addr::bytes {
     use std::bcs::to_bytes;
     use std::vector;
-    use std::vector::{for_each_ref, append};
+    use std::vector::{append, for_each_ref};
     use aptos_std::from_bcs::to_u256;
 
     // Pads a vector<u8> with a specified byte value up to the desired length
@@ -81,15 +81,13 @@ module starknet_addr::bytes {
 module starknet_addr::bytes_test {
     use std::bcs::to_bytes;
     use std::vector;
-    use aptos_std::debug;
-    use aptos_std::debug::print;
-    use starknet_addr::bytes::{pad, vec_to_bytes_be, to_bytes_24_be};
+
+    use starknet_addr::bytes::{pad, to_bytes_24_be, vec_to_bytes_be};
 
     #[test]
     fun test_padding() {
         let value = 0x123456;
         let v = to_bytes(&value);
-        print(&v);
         let padded = pad(v, 32, 0x00, true);
         // Debug print or other test verification steps can be added here
         assert!(vector::length(&padded) == 32, 1);

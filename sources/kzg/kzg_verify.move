@@ -1,4 +1,4 @@
-module starknet_addr::kzg {
+module starknet_addr::kzg_verify {
     use std::vector;
     use aptos_std::bls12381_algebra::{FormatFrLsb, FormatG1Compr, Fr, G1, G2, Gt};
     use aptos_std::crypto_algebra::{deserialize, eq, pairing, scalar_mul, sub};
@@ -22,6 +22,17 @@ module starknet_addr::kzg {
         y: vector<u8>,
         proof_bytes: vector<u8>,
     ) {
+        emit<KZGProofVerification>(KZGProofVerification {
+            success: verify_kzg_proof_impl(commitment_bytes, z, y, proof_bytes)
+        });
+    }
+
+    public fun verify_kzg_proof_impl(
+        commitment_bytes: vector<u8>,
+        z: vector<u8>,
+        y: vector<u8>,
+        proof_bytes: vector<u8>,
+    ): bool {
         assert!(
             vector::length(&commitment_bytes) == BYTES_PER_COMMITMENT,
             starknet_err::err_invalid_kzg_commitment()
@@ -53,32 +64,45 @@ module starknet_addr::kzg {
 
         let lhs = pairing<G1, G2, Gt>(&field_proof, &a);
         let rhs = pairing<G1, G2, Gt>(&b, &g2);
-        emit<KZGProofVerification>(KZGProofVerification {
-            success: eq(&lhs, &rhs)
-        });
+
+        eq(&lhs, &rhs)
     }
 
-    #[test]
-    fun test_verify_kzg_proof() {
-        let comitment = x"b28ff7af1552ad83a1abf352c3a6bba86511c69d495cdfd7fc81681767c5b516f477436efffbd1ae2a31eb1dbbe5c291";
-        let z_bytes = x"0400000000000000000000000000000000000000000000000000000000000000";
-        let y_bytes = x"5100000000000000000000000000000000000000000000000000000000000000";
-        let proof = x"85d5c5ddc49c8b44bace634bed4dd1c2f3ddc5982b459f702a7756e8896b8f29ae5db9c933ccbb9241af9c01587f3896";
-        assert!(
-            verify_kzg_proof(comitment, z_bytes, y_bytes, proof),
-            1
-        );
-    }
+    // This test failed due to changes in the trusted setup.
+
+    // #[test]
+    // fun test_verify_kzg_proof() {
+    //     let comitment = x"b28ff7af1552ad83a1abf352c3a6bba86511c69d495cdfd7fc81681767c5b516f477436efffbd1ae2a31eb1dbbe5c291";
+    //     let z_bytes = x"0400000000000000000000000000000000000000000000000000000000000000";
+    //     let y_bytes = x"5100000000000000000000000000000000000000000000000000000000000000";
+    //     let proof = x"85d5c5ddc49c8b44bace634bed4dd1c2f3ddc5982b459f702a7756e8896b8f29ae5db9c933ccbb9241af9c01587f3896";
+    //     assert!(
+    //         verify_kzg_proof_impl(comitment, z_bytes, y_bytes, proof),
+    //         1
+    //     );
+    // }
 
     #[test]
-    fun test_incorrect_kzg_proof() {
+    fun test_verify_incorrect_kzg_proof() {
         let comitment = x"b28ff7af1552ad83a1abf352c3a6bba86511c69d495cdfd7fc81681767c5b516f477436efffbd1ae2a31eb1dbbe5c291";
         let z_bytes = x"0500000000000000000000000000000000000000000000000000000000000000";
         let y_bytes = x"5100000000000000000000000000000000000000000000000000000000000000";
         let proof = x"85d5c5ddc49c8b44bace634bed4dd1c2f3ddc5982b459f702a7756e8896b8f29ae5db9c933ccbb9241af9c01587f3896";
 
         assert!(
-            !verify_kzg_proof(comitment, z_bytes, y_bytes, proof),
+            !verify_kzg_proof_impl(comitment, z_bytes, y_bytes, proof),
+            1
+        );
+    }
+
+    #[test]
+    fun test_verify_kzg_proof() {
+        let commitment = x"996396e6cd13b33a9cc52ebd69e0aadca543794a449dd39de01d0cb2c09747709afe0e5a38dc2222185dbf7eba5f5088";
+        let proof = x"8664b3057bc3aefaf110db484fdc0c422c58209c7f8a331a4c5f853a9e37d0de5f02ec0289d7d0634e49ef813fb8e84d";
+        let z = x"29ef6432c157829fd5a402d6fd6909a502ea73181df1dca79cfd71f42014c505";
+        let y = x"a5e1b0055dddd20d976ae79ffb584c472911787e3427fa8934991403a516691b";
+        assert!(
+            verify_kzg_proof_impl(commitment, z, y, proof),
             1
         );
     }

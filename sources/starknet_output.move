@@ -13,13 +13,14 @@ module starknet_addr::commitment_tree_update_output {
 module starknet_addr::starknet_output {
 
     use std::vector;
+
     use starknet_addr::starknet_err;
 
     const MERKLE_UPDATE_OFFSET: u64 = 0;
     const BLOCK_NUMBER_OFFSET: u64 = 2;
     const BLOCK_HASH_OFFSET: u64 = 3;
     const CONFIG_HASH_OFFSET: u64 = 4;
-    const HEADER_SIZE: u64 = 5;
+    const HEADER_SIZE: u64 = 6;
 
     const MESSAGE_TO_L1_FROM_ADDRESS_OFFSET: u64 = 0;
     const MESSAGE_TO_L1_TO_ADDRESS_OFFSET: u64 = 1;

@@ -25,7 +25,7 @@ module starknet_addr::fact_registry {
         *borrow(&borrow_global<VerifierFact>(@starknet_addr).verified_fact, fact)
     }
 
-    public fun register_fact(signer: &signer, fact_hash: vector<u8>) acquires VerifierFact {
+    public entry fun register_fact(signer: &signer, fact_hash: vector<u8>) acquires VerifierFact {
         if (exists<VerifierFact>(@starknet_addr) == false) {
             init_fact_registry(signer);
         };

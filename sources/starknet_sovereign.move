@@ -1,30 +1,18 @@
 module starknet_addr::starknet {
 
     use std::bcs;
-    use std::signer;
-    use std::signer::address_of;
     use std::vector;
-    use std::vector::slice;
     use aptos_std::aptos_hash::keccak256;
     use aptos_std::debug::print;
     use aptos_std::math64::pow;
     use aptos_std::table;
     use aptos_std::table::Table;
-    use aptos_framework::aptos_account;
-    use aptos_framework::aptos_coin;
-    use aptos_framework::aptos_coin::AptosCoin;
-    use aptos_framework::coin;
     use aptos_framework::event;
-    use starknet_addr::starknet_storage::{Storage};
-    use starknet_addr::starknet_storage;
-    use starknet_addr::starknet_state;
-    use starknet_addr::starknet_state::State;
+
     use starknet_addr::starknet_err;
     use starknet_addr::starknet_output;
-
-    #[test_only]
-    // use aptos_std::debug::print;
-    use starknet_addr::starknet_state::get_global_root;
+    use starknet_addr::starknet_state;
+    use starknet_addr::starknet_storage;
 
     struct MessageStorage has store, key {
         l1_to_l2_messages: Table<vector<u8>, u256>,
