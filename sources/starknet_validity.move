@@ -55,6 +55,37 @@ module starknet_addr::starknet_validity {
     const MAX_UINT192: u256 = 6277101735386680763835789423207666416102355444464034512895; // 2 ^ 192 - 1
     const MAX_UINT128: u256 = 340282366920938463463374607431768211455; // 2 ^ 128 - 1
 
+    public entry fun initialize_contract_state(
+        s: &signer,
+        program_hash: u256,
+        verifier: address,
+        config_hash: u256,
+        global_root: u256,
+        block_number: u256,
+        block_hash: u256
+    ) {
+        starknet_storage::initialize(s, program_hash, verifier, config_hash, starknet_state::new(
+            global_root,
+            block_number,
+            block_hash
+        ));
+    }
+
+    #[view]
+    public fun state_root(): u256 {
+        starknet_state::get_global_root(starknet_storage::get_state(@starknet_addr))
+    }
+
+    #[view]
+    public fun state_block_hash(): u256 {
+        starknet_state::get_block_hash(starknet_storage::get_state(@starknet_addr))
+    }
+
+    #[view]
+    public fun is_initialized(addr: address): bool {
+        starknet_storage::is_initialized(addr)
+    }
+
     #[view]
     public fun get_config_hash(): u256 {
         starknet_storage::get_config_hash(@starknet_addr)
