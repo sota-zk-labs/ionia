@@ -1,8 +1,12 @@
 module starknet_addr::named_storage {
+    // This line is used for generating constants DO NOT REMOVE!
+    // 0x30001
+    const ENAMED_STORAGE_ALREADY_SET: u64 = 0x30001;
+    // End of generating constants!
+
 
     use aptos_std::table;
     use aptos_std::table::Table;
-    use starknet_addr::starknet_err;
 
     struct Table_Storage has store, key {
         bytes_to_u256: Table<vector<u8>, u256>,
@@ -42,7 +46,7 @@ module starknet_addr::named_storage {
 
     public fun set_exclusive_value<T: copy + drop + store>(tag: vector<u8>, value: T) acquires Storage {
         let storage = borrow_global_mut<Storage<T>>(@starknet_addr);
-        assert!(table::contains(&mut storage.handle, tag), starknet_err::err_named_storage_already_set());
+        assert!(table::contains(&mut storage.handle, tag), ENAMED_STORAGE_ALREADY_SET);
         table::add(&mut storage.handle, tag, value);
     }
 }

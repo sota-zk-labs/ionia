@@ -1,17 +1,64 @@
 module starknet_addr::starknet_validity {
+    // This line is used for generating constants DO NOT REMOVE!
+    // 4
+    const CONFIG_HASH_OFFSET: u64 = 0x4;
+    // The hash of the StarkNet config
+    const CONFIG_HASH_TAG: vector<u8> = b"STARKNET_1.0_STARKNET_CONFIG_HASH";
+    // 0x20003
+    const EINVALID_CONFIG_HASH: u64 = 0x20003;
+    // 0x40007
+    const EINVALID_FINAL_BLOCK_NUMBER: u64 = 0x40007;
+    // 0x50005
+    const EINVALID_KZG_COMMITMENT: u64 = 0x50005;
+    // 0x50003
+    const EINVALID_KZG_PROOF_SIZE: u64 = 0x50003;
+    // 0x50002
+    const EINVALID_KZG_SEGMENT_SIZE: u64 = 0x50002;
+    // 0x50006
+    const EINVALID_Y_VALUE: u64 = 0x50006;
+    // 0x60001
+    const ENO_STATE_TRANSITION_PROOF: u64 = 0x60001;
+    // 0x8001
+    const EPOINT_EVALUATION_PRECOMPILE_CALL_FAILED: u64 = 0x8001;
+    // 0x40008
+    const ESTARKNET_OUTPUT_TOO_SHORT: u64 = 0x40008;
+    // 0x50001
+    const EUNEXPECTED_KZG_DA_FLAG: u64 = 0x50001;
+    // 0x80002
+    const EUNEXPECTED_POINT_EVALUATION_PRECOMPILE_OUTPUT: u64 = 0x80002;
+    // 6
+    const HEADER_SIZE: u64 = 0x6;
+    // 5
+    const KZG_SEGMENT_SIZE: u64 = 0x5;
+    // 2 ^ 128 - 1
+    const MAX_UINT128: u256 = 340282366920938463463374607431768211455;
+    // 2 ^ 192 - 1
+    const MAX_UINT192: u256 = 6277101735386680763835789423207666416102355444464034512895;
+    // b2157d3a40131b14c4c675335465dffde802f0ce5218ad012284d7f275d1b37c
+    const POINT_EVALUATION_PRECOMPILE_OUTPUT: vector<u8> = x"b2157d3a40131b14c4c675335465dffde802f0ce5218ad012284d7f275d1b37c";
+    // Random storage slot tags
+    const PROGRAM_HASH_TAG: vector<u8> = b"STARKNET_1.0_INIT_PROGRAM_HASH_UINT";
+    // 48
+    const PROOF_BYTES_LENGTH: u256 = 0x30;
+    // STARKNET_1.0_INIT_STARKNET_STATE_STRUCT
+    const STATE_STRUCT_TAG: vector<u8> = b"STARKNET_1.0_INIT_STARKNET_STATE_STRUCT";
+    // 5
+    const USE_KZG_DA_OFFSET: u64 = 0x5;
+    // STARKNET_1.0_INIT_VERIFIER_ADDRESS
+    const VERIFIER_ADDRESS_TAG: vector<u8> = b"STARKNET_1.0_INIT_VERIFIER_ADDRESS";
+    // End of generating constants!
+
 
     use std::bcs;
     use std::vector;
     use aptos_std::aptos_hash::keccak256;
     use aptos_framework::event;
 
+    use starknet_addr::blob_submisstion::new;
     use starknet_addr::bytes::{num_to_bytes_be, to_bytes_24_be, vec_to_bytes_be};
     use starknet_addr::fact_registry;
-    use starknet_addr::kzg_helper;
     use starknet_addr::onchain_data_fact_tree_encoded as onchain_data_fact;
     use starknet_addr::pre_compile;
-    use starknet_addr::starknet_err;
-    use starknet_addr::starknet_output;
     use starknet_addr::starknet_state;
     use starknet_addr::starknet_storage;
 
@@ -40,20 +87,6 @@ module starknet_addr::starknet_validity {
     struct LogStateTransitionFact has store, drop {
         state_transition_fact: vector<u8>
     }
-
-    // Random storage slot tags
-    const PROGRAM_HASH_TAG: vector<u8> = b"STARKNET_1.0_INIT_PROGRAM_HASH_UINT";
-    const VERIFIER_ADDRESS_TAG: vector<u8> = b"STARKNET_1.0_INIT_VERIFIER_ADDRESS";
-    const STATE_STRUCT_TAG: vector<u8> = b"STARKNET_1.0_INIT_STARKNET_STATE_STRUCT";
-
-    // The hash of the StarkNet config
-    const CONFIG_HASH_TAG: vector<u8> = b"STARKNET_1.0_STARKNET_CONFIG_HASH";
-
-    const PROOF_BYTES_LENGTH: u256 = 48;
-
-
-    const MAX_UINT192: u256 = 6277101735386680763835789423207666416102355444464034512895; // 2 ^ 192 - 1
-    const MAX_UINT128: u256 = 340282366920938463463374607431768211455; // 2 ^ 128 - 1
 
     public entry fun initialize_contract_state(
         s: &signer,
@@ -111,14 +144,14 @@ module starknet_addr::starknet_validity {
 
         // Validate program output
         assert!(
-            vector::length(&program_output) > starknet_output::get_header_size(),
-            starknet_err::err_starknet_output_too_short()
+            vector::length(&program_output) > HEADER_SIZE,
+            ESTARKNET_OUTPUT_TOO_SHORT
         );
 
         // Validate KZG DA flag
         assert!(
-            *vector::borrow(&program_output, starknet_output::get_use_kzg_da_offset()) == 0,
-            starknet_err::err_unexpected_kzg_da_flag()
+            *vector::borrow(&program_output, USE_KZG_DA_OFFSET) == 0,
+            EUNEXPECTED_KZG_DA_FLAG
         );
 
         let fact_data = onchain_data_fact::init_fact_data(onchain_data_hash, onchain_data_size);
@@ -131,7 +164,7 @@ module starknet_addr::starknet_validity {
         // Reentrancy protection: validate final block number
         assert!(
             state_block_number() == initial_block_number + 1,
-            starknet_err::err_invalid_final_block_number()
+            EINVALID_FINAL_BLOCK_NUMBER
         );
     }
 
@@ -141,8 +174,8 @@ module starknet_addr::starknet_validity {
     ) {
         // Validate config hash.
         assert!(
-            *vector::borrow(program_output, starknet_output::get_config_hash_offset()) == get_config_hash(),
-            starknet_err::err_invalid_config_hash()
+            *vector::borrow(program_output, CONFIG_HASH_OFFSET) == get_config_hash(),
+            EINVALID_CONFIG_HASH
         );
 
         let program_hash: vector<u8> = num_to_bytes_be(&get_program_hash());
@@ -152,7 +185,7 @@ module starknet_addr::starknet_validity {
         let sharp_fact = keccak256(buffer);
         assert!(
             fact_registry::is_valid(sharp_fact),
-            starknet_err::err_no_state_transition_proof()
+            ENO_STATE_TRANSITION_PROOF
         );
 
         event::emit(LogStateTransitionFact {
@@ -179,20 +212,20 @@ module starknet_addr::starknet_validity {
         let initial_block_number = state_block_number();
 
         assert!(
-            vector::length(&program_output) > starknet_output::get_header_size() + starknet_output::get_kzg_segment_size(),
-            starknet_err::err_starknet_output_too_short()
+            vector::length(&program_output) > HEADER_SIZE + KZG_SEGMENT_SIZE,
+            ESTARKNET_OUTPUT_TOO_SHORT
         );
 
         assert!(
-            *vector::borrow(&program_output, starknet_output::get_use_kzg_da_offset()) == 1,
-            starknet_err::err_unexpected_kzg_da_flag()
+            *vector::borrow(&program_output, USE_KZG_DA_OFFSET) == 1,
+            EUNEXPECTED_KZG_DA_FLAG
         );
         let pre_kzg_segment = vector::slice(
             &program_output,
-            starknet_output::get_header_size(),
+            HEADER_SIZE,
             vector::length(&program_output)
         );
-        let kzg_segment = vector::slice(&pre_kzg_segment, 0u64, starknet_output::get_kzg_segment_size());
+        let kzg_segment = vector::slice(&pre_kzg_segment, 0u64, KZG_SEGMENT_SIZE);
         verify_kzg_proof(&kzg_segment, &kzg_proof);
 
         let state_transition_fact = keccak256(vec_to_bytes_be(&program_output));
@@ -201,7 +234,7 @@ module starknet_addr::starknet_validity {
         // Re-entrancy protection: validate final block number
         assert!(
             state_block_number() == initial_block_number + 1,
-            starknet_err::err_invalid_final_block_number()
+            EINVALID_FINAL_BLOCK_NUMBER
         );
     }
 
@@ -210,12 +243,12 @@ module starknet_addr::starknet_validity {
         kzg_proof: &vector<u8>
     ) {
         assert!(
-            vector::length(kzg_segment) == starknet_output::get_kzg_segment_size(),
-            starknet_err::err_invalid_kzg_segment_size()
+            vector::length(kzg_segment) == KZG_SEGMENT_SIZE,
+            EINVALID_KZG_SEGMENT_SIZE
         );
         assert!(
             (vector::length(kzg_proof) as u256) == PROOF_BYTES_LENGTH,
-            starknet_err::err_invalid_kzg_proof_size()
+            EINVALID_KZG_PROOF_SIZE
         );
 
         let blob_hash: vector<u8> = get_blob_hash();
@@ -234,19 +267,19 @@ module starknet_addr::starknet_validity {
             let y_high: u256 = *vector::borrow(kzg_segment, 4);
             assert!(
                 kzg_commitment_low <= MAX_UINT192,
-                starknet_err::err_invalid_kzg_commitment()
+                EINVALID_KZG_COMMITMENT
             );
             assert!(
                 kzg_commitment_high <= MAX_UINT192,
-                starknet_err::err_invalid_kzg_commitment()
+                EINVALID_KZG_COMMITMENT
             );
             assert!(
                 y_low <= MAX_UINT128,
-                starknet_err::err_invalid_y_value()
+                EINVALID_Y_VALUE
             );
             assert!(
                 y_high <= MAX_UINT128,
-                starknet_err::err_invalid_y_value()
+                EINVALID_Y_VALUE
             );
 
             kzg_commitment = vector::empty<u8>();
@@ -265,16 +298,44 @@ module starknet_addr::starknet_validity {
         vector::append(&mut precompile_input, *kzg_proof);
 
         let (precompile_output, ok) = pre_compile::point_evaluation_precompile(precompile_input);
-        assert!(ok, starknet_err::err_point_evaluation_precompile_call_failed());
+        assert!(ok, EPOINT_EVALUATION_PRECOMPILE_CALL_FAILED);
 
         assert!(
-            keccak256(precompile_output) == kzg_helper::get_point_evaluation_precompile_output(),
-            starknet_err::err_unexpected_point_evaluation_precompile_output()
+            keccak256(precompile_output) == POINT_EVALUATION_PRECOMPILE_OUTPUT,
+            EUNEXPECTED_POINT_EVALUATION_PRECOMPILE_OUTPUT
         );
     }
 
+    public entry fun blob_submission(blob: vector<vector<u8>>, commitment: vector<vector<u8>>, proof: vector<vector<u8>>) {
+        let sidecar = new(blob, commitment, proof);
+        starknet_storage::update_sidecar(@starknet_addr, sidecar);
+    }
+
+    // TODO: Implement get_blob_hash
     public fun get_blob_hash(): vector<u8> {
         x"010b37b597b57e4c7d3df9c81ceb00130e2cca57679e6ddae2144503c5f751a1"
+    }
+
+    #[test(s = @starknet_addr)]
+    fun test_submiss_blob(s: &signer) {
+        let state = starknet_state::new(
+            0,
+            0,
+            0
+        );
+
+        starknet_storage::initialize(
+            s,
+            0,
+            @starknet_addr,
+            0,
+            state
+        );
+
+        let blob: vector<vector<u8>> = vector[x"01"];
+        let commitment: vector<vector<u8>> = vector[x"01"];
+        let proof: vector<vector<u8>> = vector[x"01"];
+        blob_submission(blob, commitment, proof);
     }
 
     #[test(s = @starknet_addr)]

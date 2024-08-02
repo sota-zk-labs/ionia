@@ -1,15 +1,25 @@
 module starknet_addr::kzg_verify {
+    // This line is used for generating constants DO NOT REMOVE!
+    // 48
+    const BYTES_PER_COMMITMENT: u64 = 0x30;
+    // 32
+    const BYTES_PER_FIELD_ELEMENT: u64 = 0x20;
+    // 48
+    const BYTES_PER_PROOF: u64 = 0x30;
+    // 0x50005
+    const EINVALID_KZG_COMMITMENT: u64 = 0x50005;
+    // 0x50003
+    const EINVALID_KZG_PROOF_SIZE: u64 = 0x50003;
+    // 0x50006
+    const EINVALID_Y_VALUE: u64 = 0x50006;
+    // End of generating constants!
+
     use std::vector;
     use aptos_std::bls12381_algebra::{FormatFrLsb, FormatG1Compr, Fr, G1, G2, Gt};
     use aptos_std::crypto_algebra::{deserialize, eq, pairing, scalar_mul, sub};
     use aptos_framework::event::emit;
 
-    use starknet_addr::starknet_err;
     use starknet_addr::trusted_setup;
-
-    const BYTES_PER_COMMITMENT: u64 = 48;
-    const BYTES_PER_FIELD_ELEMENT: u64 = 32;
-    const BYTES_PER_PROOF: u64 = 48;
 
     #[event]
     struct KZGProofVerification has store, drop {
@@ -35,21 +45,21 @@ module starknet_addr::kzg_verify {
     ): bool {
         assert!(
             vector::length(&commitment_bytes) == BYTES_PER_COMMITMENT,
-            starknet_err::err_invalid_kzg_commitment()
+            EINVALID_KZG_COMMITMENT
         );
         assert!(
             vector::length(&proof_bytes) == BYTES_PER_PROOF,
-            starknet_err::err_invalid_kzg_proof_size()
+            EINVALID_KZG_PROOF_SIZE
         );
         assert!(
             // Return error invalid field element
             vector::length(&z) == BYTES_PER_FIELD_ELEMENT,
-            starknet_err::err_invalid_y_value()
+            EINVALID_Y_VALUE
         );
         assert!(
             // Return error invalid field element
             vector::length(&y) == BYTES_PER_FIELD_ELEMENT,
-            starknet_err::err_invalid_y_value()
+            EINVALID_Y_VALUE
         );
 
         let field_z = std::option::extract(&mut deserialize<Fr, FormatFrLsb>(&z));
@@ -67,20 +77,6 @@ module starknet_addr::kzg_verify {
 
         eq(&lhs, &rhs)
     }
-
-    // This test failed due to changes in the trusted setup.
-
-    // #[test]
-    // fun test_verify_kzg_proof() {
-    //     let comitment = x"b28ff7af1552ad83a1abf352c3a6bba86511c69d495cdfd7fc81681767c5b516f477436efffbd1ae2a31eb1dbbe5c291";
-    //     let z_bytes = x"0400000000000000000000000000000000000000000000000000000000000000";
-    //     let y_bytes = x"5100000000000000000000000000000000000000000000000000000000000000";
-    //     let proof = x"85d5c5ddc49c8b44bace634bed4dd1c2f3ddc5982b459f702a7756e8896b8f29ae5db9c933ccbb9241af9c01587f3896";
-    //     assert!(
-    //         verify_kzg_proof_impl(comitment, z_bytes, y_bytes, proof),
-    //         1
-    //     );
-    // }
 
     #[test]
     fun test_verify_incorrect_kzg_proof() {

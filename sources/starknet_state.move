@@ -1,9 +1,20 @@
 module starknet_addr::starknet_state {
+    // This line is used for generating constants DO NOT REMOVE!
+    // 3
+    const BLOCK_HASH_OFFSET: u64 = 0x3;
+    // 2
+    const BLOCK_NUMBER_OFFSET: u64 = 0x2;
+    // 0x20001
+    const EINVALID_BLOCK_NUMBER: u64 = 0x20001;
+    // 0x20002
+    const EINVALID_PREVIOUS_ROOT: u64 = 0x20002;
+    // 0
+    const MERKLE_UPDATE_OFFSET: u64 = 0x0;
+    // End of generating constants!
+
 
     use std::vector;
     use starknet_addr::commitment_tree_update_output;
-    use starknet_addr::starknet_err;
-    use starknet_addr::starknet_output;
 
     struct State has copy, drop, store {
         global_root: u256,
@@ -46,16 +57,16 @@ module starknet_addr::starknet_state {
     public fun update(state: &mut State, starknet_output: vector<u256>) {
         state.block_number = state.block_number + 1;
         assert!(
-            state.block_number == *vector::borrow(&starknet_output, starknet_output::get_block_number_offset()),
-            starknet_err::err_invalid_block_number()
+            state.block_number == *vector::borrow(&starknet_output, BLOCK_NUMBER_OFFSET),
+            EINVALID_BLOCK_NUMBER
         );
 
-        state.block_hash = *vector::borrow(&starknet_output, starknet_output::get_block_hash_offset());
+        state.block_hash = *vector::borrow(&starknet_output, BLOCK_HASH_OFFSET);
 
-        let commitment_tree_update = starknet_output::get_merkle_update(starknet_output);
+        let commitment_tree_update = vector::slice(&starknet_output, MERKLE_UPDATE_OFFSET, MERKLE_UPDATE_OFFSET + 2);
         assert!(
             state.global_root == commitment_tree_update_output::get_prev_root(commitment_tree_update),
-            starknet_err::err_invalid_prev_root()
+            EINVALID_PREVIOUS_ROOT
         );
         state.global_root = commitment_tree_update_output::get_new_root(commitment_tree_update);
     }

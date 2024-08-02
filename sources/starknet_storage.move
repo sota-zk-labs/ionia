@@ -1,5 +1,7 @@
 module starknet_addr::starknet_storage {
 
+    use starknet_addr::blob_submisstion;
+    use starknet_addr::blob_submisstion::{ Sidecar, none };
     use starknet_addr::starknet_state;
     use starknet_addr::starknet_state::State;
 
@@ -7,20 +9,33 @@ module starknet_addr::starknet_storage {
         program_hash: u256,
         config_hash: u256,
         verifier: address,
-        state: State
+        state: State,
+        sidecar: Sidecar
     }
 
     public fun initialize(s: &signer, program_hash: u256, verifier: address, config_hash: u256, state: State) {
+        let sidecar: Sidecar = none();
+
         move_to(s, Storage {
             program_hash,
             config_hash,
             verifier,
             state,
+            sidecar
         });
     }
 
     public fun is_initialized(addr: address): bool {
         exists<Storage>(addr)
+    }
+
+    public fun update_sidecar(addr: address, new_sidecar: Sidecar) acquires Storage {
+        let sidecar = &mut borrow_global_mut<Storage>(addr).sidecar;
+        blob_submisstion::update_sidecar(sidecar, new_sidecar);
+    }
+
+    public fun get_sidecar(addr: address): Sidecar acquires Storage {
+        borrow_global_mut<Storage>(addr).sidecar
     }
 
     public fun set_program_hash(storage: &mut Storage, new_program_hash: u256) {

@@ -1,22 +1,32 @@
 module starknet_addr::pre_compile {
+    // This line is used for generating constants DO NOT REMOVE!
+    // 52435875175126190479447740508185965837690552500527637822603658699938581184513
+    const BLS_MODULUS: u256 = 52435875175126190479447740508185965837690552500527637822603658699938581184513;
+    // 0x50005
+    const EINVALID_KZG_COMMITMENT: u64 = 0x50005;
+    // 0x50004
+    const EINVALID_PRE_COMPILE_INPUT_SIZE: u64 = 0x50004;
+    // 0x70002
+    const EUNEXPECTED_VERSION_HASH: u64 = 0x70002;
+    // 4096
+    const FIELD_ELEMENTS_PER_BLOB: u256 = 0x1000;
+    // b2157d3a40131b14c4c675335465dffde802f0ce5218ad012284d7f275d1b37c
+    const POINT_EVALUATION_PRECOMPILE_OUTPUT: vector<u8> = x"b2157d3a40131b14c4c675335465dffde802f0ce5218ad012284d7f275d1b37c";
+    // End of generating constants!
 
     use std::vector;
 
     use starknet_addr::bytes;
     use starknet_addr::kzg_helper;
     use starknet_addr::kzg_verify;
-    use starknet_addr::starknet_err;
 
     #[test_only]
     use aptos_std::aptos_hash::keccak256;
 
-    const FIELD_ELEMENTS_PER_BLOB: u256 = 4096;
-
     public fun point_evaluation_precompile(bytes: vector<u8>): (vector<u8>, bool) {
-
         assert!(
             vector::length(&bytes) == 192,
-            starknet_err::err_invalid_pre_compile_input_size()
+            EINVALID_PRE_COMPILE_INPUT_SIZE
         );
 
         let versioned_hash = vector::slice(&bytes, (0u64), (32u64));
@@ -28,20 +38,18 @@ module starknet_addr::pre_compile {
         vector::reverse(&mut z);
         vector::reverse(&mut y);
 
-
         // Verify commitment matches versioned_hash
         assert!(
             kzg_helper::kzg_to_versioned_hash(&commitment) == versioned_hash,
-            starknet_err::err_unexpected_version_hash()
+            EUNEXPECTED_VERSION_HASH
         );
-
         // Verify KZG proof with z and y in big-endian format (LSB format in Aptos)
         assert!(
             kzg_verify::verify_kzg_proof_impl(commitment, z, y, proof),
-            starknet_err::err_invalid_kzg_commitment()
+            EINVALID_KZG_COMMITMENT
         );
 
-        let bls_modulus = kzg_helper::get_bls_modulus();
+        let bls_modulus = BLS_MODULUS;
         let output = vector::empty<u8>();
         vector::append(&mut output, bytes::num_to_bytes_be(&FIELD_ELEMENTS_PER_BLOB));
         vector::append(&mut output, bytes::num_to_bytes_be(&bls_modulus));
@@ -57,7 +65,7 @@ module starknet_addr::pre_compile {
             1
         );
         assert!(
-            keccak256(output) == kzg_helper::get_point_evaluation_precompile_output(),
+            keccak256(output) == POINT_EVALUATION_PRECOMPILE_OUTPUT,
             2
         );
     }
