@@ -54,7 +54,7 @@ module starknet_addr::starknet_validity {
     use aptos_std::aptos_hash::keccak256;
     use aptos_framework::event;
 
-    use starknet_addr::blob_submisstion::new;
+    use starknet_addr::blob_submission::new;
     use starknet_addr::bytes::{num_to_bytes_be, to_bytes_24_be, vec_to_bytes_be};
     use starknet_addr::fact_registry;
     use starknet_addr::onchain_data_fact_tree_encoded as onchain_data_fact;
