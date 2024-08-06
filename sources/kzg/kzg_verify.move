@@ -12,6 +12,8 @@ module starknet_addr::kzg_verify {
     const EINVALID_KZG_PROOF_SIZE: u64 = 0x50003;
     // 0x50006
     const EINVALID_Y_VALUE: u64 = 0x50006;
+    // 0x50007
+    const EINVALID_Z_VALUE: u64 = 0x50007;
     // End of generating constants!
 
     use std::vector;
@@ -59,7 +61,7 @@ module starknet_addr::kzg_verify {
         assert!(
             // Return error invalid field element
             vector::length(&y) == BYTES_PER_FIELD_ELEMENT,
-            EINVALID_Y_VALUE
+            EINVALID_Z_VALUE
         );
 
         let field_z = std::option::extract(&mut deserialize<Fr, FormatFrLsb>(&z));

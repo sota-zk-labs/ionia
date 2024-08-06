@@ -1,4 +1,4 @@
-module starknet_addr::blob_submisstion {
+module starknet_addr::blob_submission {
 
     struct Sidecar has copy, drop, store {
         sidecar_blob: vector<vector<u8>>,
@@ -38,7 +38,7 @@ module starknet_addr::blob_submisstion {
         return sidecar.sidecar_proof
     }
 
-    public fun none(): Sidecar {
+    public fun default(): Sidecar {
         return new(vector[x"00"], vector[x"00"], vector[x"00"])
     }
 
