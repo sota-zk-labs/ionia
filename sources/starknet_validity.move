@@ -53,6 +53,7 @@ module starknet_addr::starknet_validity {
     use std::vector;
     use aptos_std::aptos_hash::keccak256;
     use aptos_framework::event;
+    use starknet_addr::kzg_helper::kzg_to_versioned_hash;
 
     use starknet_addr::blob_submission::new;
     use starknet_addr::bytes::{num_to_bytes_be, to_bytes_24_be, vec_to_bytes_be};
@@ -250,14 +251,7 @@ module starknet_addr::starknet_validity {
             (vector::length(kzg_proof) as u256) == PROOF_BYTES_LENGTH,
             EINVALID_KZG_PROOF_SIZE
         );
-
-        let blob_hash: vector<u8> = get_blob_hash();
-
-        // TODO: Write a get_blobhash(index) return the versioned hash version of blob index t-th
-        // assert!(
-        //     bcs::to_bytes(&(*vector::borrow(&blob_hash, 0u64))) == helper::get_versioned_hash_version_kzg(),
-        //     starknet_err::err_unexpected_blob_hash_version()
-        // );
+        
         let y;
         let kzg_commitment;
         {
@@ -288,6 +282,9 @@ module starknet_addr::starknet_validity {
 
             y = num_to_bytes_be(&((y_high << 128) + y_low));
         };
+
+        let blob_hash = get_blob_hash(&kzg_commitment);
+
         let z = *vector::borrow(kzg_segment, 2);
 
         let precompile_input: vector<u8> = vector::empty<u8>();
@@ -311,9 +308,8 @@ module starknet_addr::starknet_validity {
         starknet_storage::update_sidecar(@starknet_addr, sidecar);
     }
 
-    // TODO: Implement get_blob_hash
-    public fun get_blob_hash(): vector<u8> {
-        x"010b37b597b57e4c7d3df9c81ceb00130e2cca57679e6ddae2144503c5f751a1"
+    public fun get_blob_hash(commitment: &vector<u8>): vector<u8> {
+        kzg_to_versioned_hash(commitment)
     }
 
     #[test(s = @starknet_addr)]
