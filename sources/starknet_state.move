@@ -12,9 +12,7 @@ module starknet_addr::starknet_state {
     const MERKLE_UPDATE_OFFSET: u64 = 0x0;
     // End of generating constants!
 
-
     use std::vector;
-    use starknet_addr::commitment_tree_update_output;
 
     struct State has copy, drop, store {
         global_root: u256,
@@ -65,10 +63,10 @@ module starknet_addr::starknet_state {
 
         let commitment_tree_update = vector::slice(&starknet_output, MERKLE_UPDATE_OFFSET, MERKLE_UPDATE_OFFSET + 2);
         assert!(
-            state.global_root == commitment_tree_update_output::get_prev_root(commitment_tree_update),
+            state.global_root == *vector::borrow(&commitment_tree_update, 0),
             EINVALID_PREVIOUS_ROOT
         );
-        state.global_root = commitment_tree_update_output::get_new_root(commitment_tree_update);
+        state.global_root = *vector::borrow(&commitment_tree_update, 1);
     }
 
     #[test]
