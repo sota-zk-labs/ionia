@@ -1,15 +1,17 @@
 // TODO: Add Navori as a dependency
 module starknet_addr::fact_registry {
-    use aptos_std::table::{Self, borrow, Table, upsert};
+
+    use aptos_std::smart_table;
+    use aptos_std::smart_table::{ SmartTable, borrow, upsert, new };
 
     struct VerifierFact has key, store {
-        verified_fact: Table<vector<u8>, bool>,
+        verified_fact: SmartTable<vector<u8>, bool>,
         any_fact_registered: bool
     }
 
     fun init_fact_registry(s: &signer) {
         move_to(s, VerifierFact {
-            verified_fact: table::new<vector<u8>, bool>(),
+            verified_fact: new<vector<u8>, bool>(),
             any_fact_registered: false
         });
     }
@@ -17,7 +19,7 @@ module starknet_addr::fact_registry {
     #[view]
     public fun is_valid(fact: vector<u8>): bool acquires VerifierFact {
         let verifier_fact = borrow_global<VerifierFact>(@starknet_addr);
-        *table::borrow_with_default(&verifier_fact.verified_fact, fact, &false)
+        *smart_table::borrow_with_default(&verifier_fact.verified_fact, fact, &false)
     }
 
     #[view]

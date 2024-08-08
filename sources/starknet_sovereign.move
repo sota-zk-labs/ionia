@@ -58,16 +58,16 @@ module starknet_addr::starknet {
     use aptos_std::aptos_hash::keccak256;
     use aptos_std::debug::print;
     use aptos_std::math64::pow;
-    use aptos_std::table;
-    use aptos_std::table::Table;
+    use aptos_std::smart_table;
+    use aptos_std::smart_table::SmartTable;
     use aptos_framework::event;
 
     use starknet_addr::starknet_state;
     use starknet_addr::starknet_storage;
 
     struct MessageStorage has store, key {
-        l1_to_l2_messages: Table<vector<u8>, u256>,
-        l2_to_l1_messages: Table<vector<u8>, u256>,
+        l1_to_l2_messages: SmartTable<vector<u8>, u256>,
+        l2_to_l1_messages: SmartTable<vector<u8>, u256>,
     }
 
     #[event]
@@ -269,7 +269,7 @@ module starknet_addr::starknet {
                         end_offset
                     )
                 });
-                let msg = table::borrow_mut_with_default(l2_to_l1_messages, msg_hash, 0);
+                let msg = smart_table::borrow_mut_with_default(l2_to_l1_messages, msg_hash, 0);
                 *msg = *msg + 1;
             } else {
                 let msg_hash = keccak256(
@@ -277,10 +277,10 @@ module starknet_addr::starknet {
                         &vector::slice(&program_output, offset, end_offset
                         )));
 
-                let msg_fee_plus_one = table::borrow_mut(l1_to_l2_messages, msg_hash);
+                let msg_fee_plus_one = smart_table::borrow_mut(l1_to_l2_messages, msg_hash);
                 assert!(*msg_fee_plus_one > 0, EINVALID_MESSAGE_TO_CONSUME);
                 total_mgs_fees = total_mgs_fees + *msg_fee_plus_one - 1;
-                table::upsert(l1_to_l2_messages, msg_hash, 0);
+                smart_table::upsert(l1_to_l2_messages, msg_hash, 0);
 
                 let nonce = *vector::borrow(&program_output, MESSAGE_TO_L2_NONCE_OFFSET);
                 let msgs = vector::slice(
@@ -323,8 +323,8 @@ module starknet_addr::starknet {
         let state = starknet_state::new(0, 0, 0);
 
         let msg_storage = MessageStorage {
-            l1_to_l2_messages: table::new(),
-            l2_to_l1_messages: table::new()
+            l1_to_l2_messages: smart_table::new(),
+            l2_to_l1_messages: smart_table::new()
         };
         move_to(s, msg_storage);
         starknet_storage::initialize(

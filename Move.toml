@@ -14,7 +14,7 @@ starknet_addr = "0xb50b1b8157ebf7315813c1f745a1e1c68c73111afe2b6761975223d317569
 
 [dependencies.AptosFramework]
 git = "https://github.com/aptos-labs/aptos-core.git"
-rev = "main"
+rev = "release-v.1.14"
 subdir = "aptos-move/framework/aptos-framework"
 
 [dev-dependencies]
