@@ -5,7 +5,7 @@ authors = []
 
 [addresses]
 #local
-starknet_addr = "0xb50b1b8157ebf7315813c1f745a1e1c68c73111afe2b6761975223d317569b69"
+starknet_addr = "0x436e0cfb2ded62fcb8838dec11ad1bdb29e6bbd75a184f059e5aded7774b434a"
 
 #testnet
 #starknet_addr = "0x373904556c31ee071c1853fea9dc2d57383073eb4df55af10bd395471b947bcf"
@@ -14,7 +14,7 @@ starknet_addr = "0xb50b1b8157ebf7315813c1f745a1e1c68c73111afe2b6761975223d317569
 
 [dependencies.AptosFramework]
 git = "https://github.com/aptos-labs/aptos-core.git"
-rev = "release-v.1.14"
+rev = "main"
 subdir = "aptos-move/framework/aptos-framework"
 
 [dev-dependencies]

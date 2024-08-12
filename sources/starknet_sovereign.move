@@ -1,73 +1,34 @@
 module starknet_addr::starknet {
-    // This line is used for generating constants DO NOT REMOVE!
-    // 4
-    const CONFIG_HASH_OFFSET: u64 = 0x4;
-    // The hash of the StarkNet config
-    const CONFIG_HASH_TAG: vector<u8> = b"STARKNET_1.0_STARKNET_CONFIG_HASH";
-    // 0x20003
-    const EINVALID_CONFIG_HASH: u64 = 0x20003;
-    // 0x40007
-    const EINVALID_FINAL_BLOCK_NUMBER: u64 = 0x40007;
-    // 0x40001
-    const EINVALID_MESSAGE_SEGMENT_SIZE: u64 = 0x40001;
-    // 0x40005
-    const EINVALID_MESSAGE_TO_CONSUME: u64 = 0x40005;
-    // 0x40003
-    const EINVALID_PAYLOAD_LENGTH: u64 = 0x40003;
-    // 0x40002
-    const EMESSAGE_TOO_SHORT: u64 = 0x40002;
-    // 0x40006
-    const ESTARKNET_OUTPUT_TOO_LONG: u64 = 0x40006;
-    // 0x40008
-    const ESTARKNET_OUTPUT_TOO_SHORT: u64 = 0x40008;
-    // 0x40004
-    const ETRUNCATED_MESSAGE_PAYLOAD: u64 = 0x40004;
-    // 6
-    const HEADER_SIZE: u64 = 0x6;
-    // 0
-    const MESSAGE_TO_L1_FROM_ADDRESS_OFFSET: u64 = 0x0;
-    // 2
-    const MESSAGE_TO_L1_PAYLOAD_SIZE_OFFSET: u64 = 0x2;
-    // 3
-    const MESSAGE_TO_L1_PREFIX_SIZE: u64 = 0x3;
-    // 1
-    const MESSAGE_TO_L1_TO_ADDRESS_OFFSET: u64 = 0x1;
-    // 0
-    const MESSAGE_TO_L2_FROM_ADDRESS_OFFSET: u64 = 0x0;
-    // 2
-    const MESSAGE_TO_L2_NONCE_OFFSET: u64 = 0x2;
-    // 4
-    const MESSAGE_TO_L2_PAYLOAD_SIZE_OFFSET: u64 = 0x4;
-    // 5
-    const MESSAGE_TO_L2_PREFIX_SIZE: u64 = 0x5;
-    // 3
-    const MESSAGE_TO_L2_SELECTOR_OFFSET: u64 = 0x3;
-    // 1
-    const MESSAGE_TO_L2_TO_ADDRESS_OFFSET: u64 = 0x1;
-    // Random storage slot tags
-    const PROGRAM_HASH_TAG: vector<u8> = b"STARKNET_1.0_INIT_PROGRAM_HASH_UINT";
-    // STARKNET_1.0_INIT_STARKNET_STATE_STRUCT
-    const STATE_STRUCT_TAG: vector<u8> = b"STARKNET_1.0_INIT_STARKNET_STATE_STRUCT";
-    // STARKNET_1.0_INIT_VERIFIER_ADDRESS
-    const VERIFIER_ADDRESS_TAG: vector<u8> = b"STARKNET_1.0_INIT_VERIFIER_ADDRESS";
-    // End of generating constants!
-
 
     use std::bcs;
+    use std::signer;
+    use std::signer::address_of;
     use std::vector;
+    use std::vector::slice;
     use aptos_std::aptos_hash::keccak256;
     use aptos_std::debug::print;
     use aptos_std::math64::pow;
-    use aptos_std::smart_table;
-    use aptos_std::smart_table::SmartTable;
+    use aptos_std::table;
+    use aptos_std::table::Table;
+    use aptos_framework::aptos_account;
+    use aptos_framework::aptos_coin;
+    use aptos_framework::aptos_coin::AptosCoin;
+    use aptos_framework::coin;
     use aptos_framework::event;
-
-    use starknet_addr::starknet_state;
+    use starknet_addr::starknet_storage::{Storage};
     use starknet_addr::starknet_storage;
+    use starknet_addr::starket_state;
+    use starknet_addr::starket_state::State;
+    use starknet_addr::starknet_err;
+    use starknet_addr::starknet_output;
+
+    #[test_only]
+    // use aptos_std::debug::print;
+    use starknet_addr::starket_state::get_global_root;
 
     struct MessageStorage has store, key {
-        l1_to_l2_messages: SmartTable<vector<u8>, u256>,
-        l2_to_l1_messages: SmartTable<vector<u8>, u256>,
+        l1_to_l2_messages: Table<vector<u8>, u256>,
+        l2_to_l1_messages: Table<vector<u8>, u256>,
     }
 
     #[event]
@@ -94,7 +55,13 @@ module starknet_addr::starknet {
         blockHash: u256
     }
 
-    fun set_message_cancellation_delay(_delay_in_seconds: u256) {}
+
+    const PROGRAM_HASH_TAG: vector<u8> = b"STARKNET_1.0_INIT_PROGRAM_HASH_UINT";
+    const VERIFIER_ADDRESS_TAG: vector<u8> = b"STARKNET_1.0_INIT_VERIFIER_ADDRESS";
+    const STATE_STRUCT_TAG: vector<u8> = b"STARKNET_1.0_INIT_STARKNET_STATE_STRUCT";
+    const CONFIG_HASH_TAG: vector<u8> = b"STARKNET_1.0_STARKNET_CONFIG_HASH";
+
+    fun set_message_cancellation_delay(delay_in_seconds: u256) {}
 
     #[view]
     public fun is_initialized(addr: address): bool {
@@ -116,7 +83,7 @@ module starknet_addr::starknet {
         block_number: u256,
         block_hash: u256
     ) {
-        starknet_storage::initialize(s, program_hash, verifier, config_hash, starknet_state::new(
+        starknet_storage::initialize(s, program_hash, verifier, config_hash, starket_state::new(
             global_root,
             block_number,
             block_hash
@@ -130,17 +97,17 @@ module starknet_addr::starknet {
 
     #[view]
     public fun state_root(): u256 {
-        starknet_state::get_global_root(starknet_storage::get_state(@starknet_addr))
+        starket_state::get_global_root(starknet_storage::get_state(@starknet_addr))
     }
 
     #[view]
     public fun state_block_number(): u256 {
-        starknet_state::get_block_number(starknet_storage::get_state(@starknet_addr))
+        starket_state::get_block_number(starknet_storage::get_state(@starknet_addr))
     }
 
     #[view]
     public fun state_block_hash(): u256 {
-        starknet_state::get_block_hash(starknet_storage::get_state(@starknet_addr))
+        starket_state::get_block_hash(starknet_storage::get_state(@starknet_addr))
     }
 
     #[view]
@@ -158,14 +125,14 @@ module starknet_addr::starknet {
         let initial_block_number = state_block_number();
 
         // validate program output
-        assert!(vector::length(&program_output) >= HEADER_SIZE, ESTARKNET_OUTPUT_TOO_SHORT);
+        starknet_output::validate(program_output);
         // Validate config hash
         assert!(
             get_config_hash() == *vector::borrow(
                 &program_output,
-                CONFIG_HASH_OFFSET
+                starknet_output::get_config_hash_offset()
             ),
-            EINVALID_CONFIG_HASH
+            starknet_err::err_invalid_config_hash()
         );
         // Update state
         starknet_storage::update_state(@starknet_addr, program_output);
@@ -176,8 +143,8 @@ module starknet_addr::starknet {
         // the processing of the L1 -> L2 messages.
 
         // Process L2 -> L1 messages.
-        let _output_offset = HEADER_SIZE;
-        let _program_output_length = vector::length(&program_output);
+        let output_offset = starknet_output::get_header_size();
+        let program_output_length = vector::length(&program_output);
 
         // TODO: process messages
         // output_offset = output_offset + processMessages(
@@ -194,19 +161,19 @@ module starknet_addr::starknet {
         // TODO: remove dummy code
         let output_offset = vector::length(&program_output);
 
-        assert!(output_offset == vector::length(&program_output), ESTARKNET_OUTPUT_TOO_LONG);
+        assert!(output_offset == vector::length(&program_output), starknet_err::err_starknet_output_too_long());
         // Note that processing L1 -> L2 messages does an external call, and it shouldn't be
         // followed by storage changes.
 
         let state = starknet_storage::get_state(@starknet_addr);
 
         event::emit(LogStateUpdate {
-            global_root: starknet_state::get_global_root(state),
-            block_number: starknet_state::get_block_number(state),
-            blockHash: starknet_state::get_block_hash(state)
+            global_root: starket_state::get_global_root(state),
+            block_number: starket_state::get_block_number(state),
+            blockHash: starket_state::get_block_hash(state)
         });
         // Re-entrancy protection (see above).
-        assert!(state_block_number() == initial_block_number + 1, EINVALID_FINAL_BLOCK_NUMBER)
+        assert!(state_block_number() == initial_block_number + 1, starknet_err::err_invalid_final_block_number())
     }
 
     fun process_messages(is_L2_to_L1: bool, program_output: vector<u256>): u64 acquires MessageStorage {
@@ -216,23 +183,23 @@ module starknet_addr::starknet {
         let l2_to_l1_messages = &mut msg_storage.l2_to_l1_messages;
 
         let message_segment_size = (*vector::borrow(&program_output, 0) as u64);
-        assert!(message_segment_size < pow(2, 30), EINVALID_MESSAGE_SEGMENT_SIZE);
+        assert!(message_segment_size < pow(2, 30), starknet_err::err_invalid_message_segment_size());
 
         let offset = 1u64;
         let message_segment_end = offset + message_segment_size;
 
         let payload_offset_size =
             if (is_L2_to_L1)
-                MESSAGE_TO_L1_PAYLOAD_SIZE_OFFSET
+                starknet_output::get_message_to_l1_payload_size_offset()
             else
-                MESSAGE_TO_L2_PAYLOAD_SIZE_OFFSET;
+                starknet_output::get_message_to_l2_payload_size_offset();
 
         let total_mgs_fees = 0;
         while (offset < message_segment_end) {
             let payload_length_offset = offset + payload_offset_size;
             assert!(
                 payload_length_offset < vector::length(&program_output),
-                EMESSAGE_TOO_SHORT
+                starknet_err::err_message_too_short()
             );
 
             print(&payload_length_offset);
@@ -240,66 +207,66 @@ module starknet_addr::starknet {
             print(&(*vector::borrow(&program_output, payload_length_offset) as u64));
 
             let payload_length = (*vector::borrow(&program_output, payload_length_offset) as u64);
-            assert!(payload_length < pow(2, 30), EINVALID_PAYLOAD_LENGTH);
+            assert!(payload_length < pow(2, 30), starknet_err::err_invalid_payload_length());
 
             let end_offset = payload_length_offset + payload_length;
             assert!(
                 end_offset <= vector::length(&program_output),
-                ETRUNCATED_MESSAGE_PAYLOAD
+                starknet_err::err_truncated_message_payload()
             );
 
             if (is_L2_to_L1) {
                 let msg_hash = keccak256(
                     bcs::to_bytes(
-                        &vector::slice(&program_output, offset, end_offset
+                        &vector::slice(&program_output, (offset as u64), (end_offset as u64)
                         )));
 
                 event::emit(LogMessageToL1 {
                     from_address: *vector::borrow(
                         &program_output,
-                        offset + MESSAGE_TO_L1_FROM_ADDRESS_OFFSET
+                        (offset as u64) + starknet_output::get_message_to_l1_from_address_offset()
                     ),
                     to_address: *vector::borrow(
                         &program_output,
-                        offset + MESSAGE_TO_L1_TO_ADDRESS_OFFSET
+                        (offset as u64) + starknet_output::get_message_to_l1_to_address_offset()
                     ),
                     payload: vector::slice(
                         &program_output,
-                        offset + MESSAGE_TO_L1_PREFIX_SIZE,
-                        end_offset
+                        (offset as u64) + starknet_output::get_message_to_l1_prefix_size(),
+                        (end_offset as u64)
                     )
                 });
-                let msg = smart_table::borrow_mut_with_default(l2_to_l1_messages, msg_hash, 0);
+                let msg = table::borrow_mut_with_default(l2_to_l1_messages, msg_hash, 0);
                 *msg = *msg + 1;
             } else {
                 let msg_hash = keccak256(
                     bcs::to_bytes(
-                        &vector::slice(&program_output, offset, end_offset
+                        &vector::slice(&program_output, (offset as u64), (end_offset as u64)
                         )));
 
-                let msg_fee_plus_one = smart_table::borrow_mut(l1_to_l2_messages, msg_hash);
-                assert!(*msg_fee_plus_one > 0, EINVALID_MESSAGE_TO_CONSUME);
+                let msg_fee_plus_one = table::borrow_mut(l1_to_l2_messages, msg_hash);
+                assert!(*msg_fee_plus_one > 0, starknet_err::err_invalid_message_to_consume());
                 total_mgs_fees = total_mgs_fees + *msg_fee_plus_one - 1;
-                smart_table::upsert(l1_to_l2_messages, msg_hash, 0);
+                table::upsert(l1_to_l2_messages, msg_hash, 0);
 
-                let nonce = *vector::borrow(&program_output, MESSAGE_TO_L2_NONCE_OFFSET);
+                let nonce = *vector::borrow(&program_output, starknet_output::get_message_to_l2_nonce_offset());
                 let msgs = vector::slice(
                     &program_output,
-                    offset + MESSAGE_TO_L2_PREFIX_SIZE,
-                    end_offset
+                    (offset as u64) + starknet_output::get_message_to_l2_prefix_size(),
+                    (end_offset as u64)
                 );
                 event::emit(ConsumedMessageToL2 {
                     from_address: *vector::borrow(
                         &program_output,
-                        offset + MESSAGE_TO_L2_FROM_ADDRESS_OFFSET
+                        (offset as u64) + starknet_output::get_message_to_l2_from_address_offset()
                     ),
                     to_address: *vector::borrow(
                         &program_output,
-                        offset + MESSAGE_TO_L2_TO_ADDRESS_OFFSET
+                        (offset as u64) + starknet_output::get_message_to_l2_to_address_offset()
                     ),
                     selector: *vector::borrow(
                         &program_output,
-                        offset + MESSAGE_TO_L2_SELECTOR_OFFSET
+                        (offset as u64) + starknet_output::get_message_to_l2_selector_offset()
                     ),
                     payload: msgs,
                     nonce,
@@ -309,7 +276,7 @@ module starknet_addr::starknet {
             offset = end_offset;
         };
 
-        assert!(offset == message_segment_end, EINVALID_MESSAGE_SEGMENT_SIZE);
+        assert!(offset == message_segment_end, starknet_err::err_invalid_message_segment_size());
 
         if (total_mgs_fees > 0) {
             // TODO: transfer fees
@@ -320,11 +287,11 @@ module starknet_addr::starknet {
 
     #[test(s = @starknet_addr)]
     fun update_state_success(s: &signer) {
-        let state = starknet_state::new(0, 0, 0);
+        let state = starket_state::new(0, 0, 0);
 
         let msg_storage = MessageStorage {
-            l1_to_l2_messages: smart_table::new(),
-            l2_to_l1_messages: smart_table::new()
+            l1_to_l2_messages: table::new(),
+            l2_to_l1_messages: table::new()
         };
         move_to(s, msg_storage);
         starknet_storage::initialize(

@@ -1,41 +1,26 @@
 module starknet_addr::starknet_storage {
 
-    use starknet_addr::blob_submission;
-    use starknet_addr::blob_submission::{ Sidecar, default };
-    use starknet_addr::starknet_state;
-    use starknet_addr::starknet_state::State;
+    use starknet_addr::starket_state;
+    use starknet_addr::starket_state::State;
 
     struct Storage has copy, drop, store, key {
         program_hash: u256,
         config_hash: u256,
         verifier: address,
-        state: State,
-        sidecar: Sidecar
+        state: State
     }
 
     public fun initialize(s: &signer, program_hash: u256, verifier: address, config_hash: u256, state: State) {
-        let sidecar: Sidecar = default();
-
         move_to(s, Storage {
             program_hash,
             config_hash,
             verifier,
             state,
-            sidecar
         });
     }
 
     public fun is_initialized(addr: address): bool {
         exists<Storage>(addr)
-    }
-
-    public fun update_sidecar(addr: address, new_sidecar: Sidecar) acquires Storage {
-        let sidecar = &mut borrow_global_mut<Storage>(addr).sidecar;
-        blob_submission::update_sidecar(sidecar, new_sidecar);
-    }
-
-    public fun get_sidecar(addr: address): Sidecar acquires Storage {
-        borrow_global<Storage>(addr).sidecar
     }
 
     public fun set_program_hash(storage: &mut Storage, new_program_hash: u256) {
@@ -64,7 +49,7 @@ module starknet_addr::starknet_storage {
 
     public fun update_state(addr: address, starknet_output: vector<u256>) acquires Storage {
         let state = &mut borrow_global_mut<Storage>(addr).state;
-        starknet_state::update(state, starknet_output)
+        starket_state::update(state, starknet_output)
     }
 
     public fun get_state(addr: address): State acquires Storage {

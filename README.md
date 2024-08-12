@@ -50,11 +50,6 @@ Publish to local
 aptos move publish --profile <your-profile-name> --network local
 ```
 
-To test the verify_kzg_proof function, run this command:
-
-```bash
-aptos move run --json-file .\scripts\verify_kzg_proof.json 
-
 ## StarkNet Consensus Protocol Contracts
 
 PoC solidity implementation of the following Starknet Decentralized Protocol proposal:
