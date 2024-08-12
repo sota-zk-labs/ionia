@@ -1,0 +1,24 @@
+name: Aptos Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  # cancel redundant builds on PRs (only on PR, not on branches)
+  group: ${{ github.workflow }}-${{ github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  aptos_test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: ./.github/actions/setup_aptos_cli
+        with:
+          version: 1.0.11
+      - name: Test
+        working-directory: sources
+        run: aptos move test
