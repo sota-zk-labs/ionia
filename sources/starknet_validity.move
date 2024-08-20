@@ -319,7 +319,7 @@ module starknet_addr::starknet_validity {
     }
 
     #[view]
-    public inline fun get_program_hash(): u256 {
+    public fun get_program_hash(): u256 {
         starknet_storage::get_program_hash(@starknet_addr)
     }
 
