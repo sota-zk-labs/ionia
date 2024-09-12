@@ -16,6 +16,9 @@ module starknet_addr::starknet_validity {
     use starknet_addr::starknet_state;
     use starknet_addr::starknet_storage;
 
+    #[test_only]
+    use aptos_framework::account::create_account_for_test;
+
     // This line is used for generating constants DO NOT REMOVE!
     // 4
     const CONFIG_HASH_OFFSET: u64 = 0x4;
@@ -352,6 +355,7 @@ module starknet_addr::starknet_validity {
 
     #[test(s = @starknet_addr)]
     fun test_update_state_kzg_da(s: &signer) {
+        create_account_for_test(@starknet_addr);
         let state = starknet_state::new(
             1140305933455702090030976682007678821560814182066058788699329257003131568320,
             663730,
@@ -402,6 +406,7 @@ module starknet_addr::starknet_validity {
 
     #[test(s = @starknet_addr)]
     fun test_update_state(s: &signer) {
+        create_account_for_test(@starknet_addr);
         let state = starknet_state::new(
             1970272326382990453316397420342340810466901058626735958618873840050980391150,
             608890,
