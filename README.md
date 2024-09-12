@@ -21,7 +21,6 @@ sudo sh get-docker.sh
 
 [Reference](https://docs.docker.com/engine/install/ubuntu/#install-using-the-convenience-script)
 
-
 ## Testing
 
 ### Unit
@@ -53,7 +52,7 @@ aptos move publish --profile <your-profile-name> --network local
 To test the verify_kzg_proof function, run this command:
 
 ```bash
-aptos move run --json-file .\scripts\verify_kzg_proof.json 
+aptos move run --json-file .\scripts\verify_kzg_proof.json
 
 ## StarkNet Consensus Protocol Contracts
 
@@ -66,3 +65,4 @@ PoC solidity implementation of the following Starknet Decentralized Protocol pro
 - [V - Checkpoints for Fast Finality](https://community.starknet.io/t/starknet-decentralized-protocol-v-checkpoints-for-fast-finality/6032)
 - [VI - The Buffer Problem](https://community.starknet.io/t/starknet-decentralized-protocol-vi-the-buffer-problem/7098)
 - [VII - Chained Proof Protocols & Braiding](https://community.starknet.io/t/starknet-decentralized-protocol-vii-chained-proof-protocols-braiding/18831)
+```

@@ -1,12 +1,15 @@
 module starknet_addr::blob_submission {
-
     struct Sidecar has copy, drop, store {
         sidecar_blob: vector<vector<u8>>,
         sidecar_commitment: vector<vector<u8>>,
         sidecar_proof: vector<vector<u8>>,
     }
 
-    public fun new(sidecar_blob: vector<vector<u8>>, sidecar_commitment: vector<vector<u8>>, sidecar_proof: vector<vector<u8>>): Sidecar {
+    public fun new(
+        sidecar_blob: vector<vector<u8>>,
+        sidecar_commitment: vector<vector<u8>>,
+        sidecar_proof: vector<vector<u8>>
+    ): Sidecar {
         return Sidecar {
             sidecar_blob,
             sidecar_commitment,
@@ -40,12 +43,5 @@ module starknet_addr::blob_submission {
 
     public fun default(): Sidecar {
         return new(vector[x"00"], vector[x"00"], vector[x"00"])
-    }
-
-    public fun update_sidecar(current_sidecar: &mut Sidecar, new_sidecar: Sidecar) {
-        // TODO: Improve error handle and verify DA submission handle
-        current_sidecar.sidecar_blob = new_sidecar.sidecar_blob;
-        current_sidecar.sidecar_commitment = new_sidecar.sidecar_commitment;
-        current_sidecar.sidecar_proof = new_sidecar.sidecar_proof;
     }
 }

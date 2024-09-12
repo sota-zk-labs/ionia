@@ -4,17 +4,13 @@ version = "1.0.0"
 authors = []
 
 [addresses]
-#local
 starknet_addr = "0xb50b1b8157ebf7315813c1f745a1e1c68c73111afe2b6761975223d317569b69"
-
-#testnet
-#starknet_addr = "0x373904556c31ee071c1853fea9dc2d57383073eb4df55af10bd395471b947bcf"
 
 [dev-addresses]
 
 [dependencies.AptosFramework]
 git = "https://github.com/aptos-labs/aptos-core.git"
-rev = "release-v.1.14"
+rev = "aptos-release-v1.17"
 subdir = "aptos-move/framework/aptos-framework"
 
 [dev-dependencies]

@@ -2,22 +2,8 @@
 module starknet_addr::bytes {
     use std::bcs::to_bytes;
     use std::vector;
-    use std::vector::{append, for_each_ref};
+    use std::vector::{append, for_each_ref, reverse, trim_reverse};
     use aptos_std::from_bcs::to_u256;
-
-    public fun reverse(x: vector<u8>): vector<u8> {
-        let result = vector::empty<u8>();
-        let length = vector::length(&x);
-        let i = 0;
-
-        while (i < length) {
-            let byte = vector::borrow(&x, length - 1 - i);
-            vector::push_back(&mut result, *byte);
-            i = i + 1;
-        };
-
-        return result
-    }
 
     public fun vec_to_bytes_be<Element>(v: &vector<Element>): vector<u8> {
         let bytes: vector<u8> = vector[];
@@ -30,20 +16,22 @@ module starknet_addr::bytes {
     }
 
     public fun num_to_bytes_be<Element>(v: &Element): vector<u8> {
-        reverse(to_bytes(v))
+        let tmp = to_bytes(v);
+        vector::reverse(&mut tmp);
+        tmp
     }
 
     public fun u256_from_bytes_be(bytes: &vector<u8>): u256 {
-        to_u256(reverse(*bytes))
+        let vec = *bytes;
+        reverse(&mut vec);
+        to_u256(vec)
     }
 
     public fun to_bytes_24_be(bytes: &vector<u8>): vector<u8> {
         let vec = *bytes;
-        while (vector::length(&vec) > 24) {
-            vector::pop_back(&mut vec);
-        };
-        assert!(vector::length(&vec) == 24, 1);
-        reverse(vec)
+        trim_reverse(&mut vec, 24);
+        reverse(&mut vec);
+        vec
     }
 }
 
