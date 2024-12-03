@@ -1,9 +1,8 @@
 module starknet_addr::onchain_data_fact_tree_encoded {
     use std::bcs::to_bytes;
-    use std::vector;
+    use std::vector::{length, reverse_append, append};
     use aptos_std::aptos_hash::keccak256;
-
-    use starknet_addr::bytes;
+    use lib_addr::bytes::{num_to_bytes_le, bytes32_to_u256, vec_to_bytes_le};
 
     struct DataAvailabilityFact has store, drop {
         onchain_data_hash: u256,
@@ -14,16 +13,16 @@ module starknet_addr::onchain_data_fact_tree_encoded {
         program_output: &vector<u256>,
         fact_data: DataAvailabilityFact
     ): vector<u8> {
-        let main_public_input_length: u256 = (vector::length(program_output) as u256);
-        let main_public_input_hash: vector<u8> = keccak256(bytes::vec_to_bytes_be(program_output));
-        vector::reverse_append(&mut main_public_input_hash, to_bytes(&main_public_input_length));
-        vector::append(&mut main_public_input_hash, bytes::num_to_bytes_be(&fact_data.onchain_data_hash));
-        vector::append(
+        let main_public_input_length: u256 = (length(program_output) as u256);
+        let main_public_input_hash: vector<u8> = keccak256(vec_to_bytes_le(program_output));
+        reverse_append(&mut main_public_input_hash, to_bytes(&main_public_input_length));
+        append(&mut main_public_input_hash, num_to_bytes_le(&fact_data.onchain_data_hash));
+        append(
             &mut main_public_input_hash,
-            bytes::num_to_bytes_be(&(main_public_input_length + fact_data.onchain_data_size))
+            num_to_bytes_le(&(main_public_input_length + fact_data.onchain_data_size))
         );
         let hash_result: vector<u8> = keccak256(main_public_input_hash);
-        let result = bytes::num_to_bytes_be(&(bytes::u256_from_bytes_be(&hash_result) + 1));
+        let result = num_to_bytes_le(&(bytes32_to_u256(hash_result) + 1));
         return result
     }
 

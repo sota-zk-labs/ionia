@@ -1,15 +1,15 @@
 module starknet_addr::starknet_validity {
     use std::bcs;
-    use std::vector;
+    use std::signer::address_of;
+    use std::vector::{borrow, length, slice, append, trim_reverse, reverse};
     use aptos_std::aptos_hash::keccak256;
     use aptos_framework::account::new_event_handle;
     use aptos_framework::event;
     use aptos_framework::event::emit_event;
+    use starknet_addr::fact_registry::{is_valid, init_fact_registry};
+    use lib_addr::bytes::{num_to_bytes_le, bytes32_to_u256};
 
     use starknet_addr::blob_submission::new;
-    use starknet_addr::bytes::{num_to_bytes_be, to_bytes_24_be, vec_to_bytes_be};
-    use starknet_addr::fact_registry;
-    use starknet_addr::fact_registry::init_fact_registry;
     use starknet_addr::kzg_helper::kzg_to_versioned_hash;
     use starknet_addr::onchain_data_fact_tree_encoded as onchain_data_fact;
     use starknet_addr::pre_compile;
@@ -18,6 +18,10 @@ module starknet_addr::starknet_validity {
 
     #[test_only]
     use aptos_framework::account::create_account_for_test;
+    #[test_only]
+    use starknet_addr::fact_registry;
+    #[test_only]
+    use starknet_addr::fact_registry::register_fact;
 
     // This line is used for generating constants DO NOT REMOVE!
     // 4
@@ -115,13 +119,13 @@ module starknet_addr::starknet_validity {
 
         // Validate program output
         assert!(
-            vector::length(&program_output) > HEADER_SIZE,
+            length(&program_output) > HEADER_SIZE,
             ESTARKNET_OUTPUT_TOO_SHORT
         );
 
         // Validate KZG DA flag
         assert!(
-            *vector::borrow(&program_output, USE_KZG_DA_OFFSET) == 0,
+            *borrow(&program_output, USE_KZG_DA_OFFSET) == 0,
             EUNEXPECTED_KZG_DA_FLAG
         );
 
@@ -146,23 +150,23 @@ module starknet_addr::starknet_validity {
         let initial_block_number = state_block_number();
 
         assert!(
-            vector::length(&program_output) > HEADER_SIZE + KZG_SEGMENT_SIZE,
+            length(&program_output) > HEADER_SIZE + KZG_SEGMENT_SIZE,
             ESTARKNET_OUTPUT_TOO_SHORT
         );
 
         assert!(
-            *vector::borrow(&program_output, USE_KZG_DA_OFFSET) == 1,
+            *borrow(&program_output, USE_KZG_DA_OFFSET) == 1,
             EUNEXPECTED_KZG_DA_FLAG
         );
-        let pre_kzg_segment = vector::slice(
+        let pre_kzg_segment = slice(
             &program_output,
             HEADER_SIZE,
-            vector::length(&program_output)
+            length(&program_output)
         );
-        let kzg_segment = vector::slice(&pre_kzg_segment, 0u64, KZG_SEGMENT_SIZE);
+        let kzg_segment = slice(&pre_kzg_segment, 0u64, KZG_SEGMENT_SIZE);
         verify_kzg_proof(&kzg_segment, &kzg_proof);
 
-        let state_transition_fact = keccak256(vec_to_bytes_be(&program_output));
+        let state_transition_fact = keccak256(num_to_bytes_le(&program_output));
         update_internal_state(s, &program_output, state_transition_fact);
 
         // Re-entrancy protection: validate final block number
@@ -189,15 +193,15 @@ module starknet_addr::starknet_validity {
     ) {
         // Validate config hash.
         assert!(
-            *vector::borrow(program_output, CONFIG_HASH_OFFSET) == get_config_hash(),
+            *borrow(program_output, CONFIG_HASH_OFFSET) == get_config_hash(),
             EINVALID_CONFIG_HASH
         );
 
-        let program_hash: vector<u8> = num_to_bytes_be(&get_program_hash());
-        vector::append(&mut program_hash, state_transition_fact);
-        let sharp_fact = keccak256(program_hash);
+        let program_hash: vector<u8> = num_to_bytes_le(&get_program_hash());
+        append(&mut program_hash, state_transition_fact);
+        let sharp_fact = bytes32_to_u256(keccak256(program_hash));
         assert!(
-            fact_registry::is_valid(sharp_fact),
+            is_valid(address_of(s), sharp_fact),
             ENO_STATE_TRANSITION_PROOF
         );
 
@@ -225,21 +229,21 @@ module starknet_addr::starknet_validity {
         kzg_proof: &vector<u8>
     ) {
         assert!(
-            vector::length(kzg_segment) == KZG_SEGMENT_SIZE,
+            length(kzg_segment) == KZG_SEGMENT_SIZE,
             EINVALID_KZG_SEGMENT_SIZE
         );
         assert!(
-            (vector::length(kzg_proof) as u256) == PROOF_BYTES_LENGTH,
+            (length(kzg_proof) as u256) == PROOF_BYTES_LENGTH,
             EINVALID_KZG_PROOF_SIZE
         );
 
         let y;
         let kzg_commitment;
         {
-            let kzg_commitment_low: u256 = *vector::borrow(kzg_segment, 0);
-            let kzg_commitment_high: u256 = *vector::borrow(kzg_segment, 1);
-            let y_low: u256 = *vector::borrow(kzg_segment, 3);
-            let y_high: u256 = *vector::borrow(kzg_segment, 4);
+            let kzg_commitment_low: u256 = *borrow(kzg_segment, 0);
+            let kzg_commitment_high: u256 = *borrow(kzg_segment, 1);
+            let y_low: u256 = *borrow(kzg_segment, 3);
+            let y_high: u256 = *borrow(kzg_segment, 4);
             assert!(
                 kzg_commitment_low <= MAX_UINT192,
                 EINVALID_KZG_COMMITMENT
@@ -257,20 +261,20 @@ module starknet_addr::starknet_validity {
                 EINVALID_Y_VALUE
             );
 
-            kzg_commitment = to_bytes_24_be(&bcs::to_bytes(&kzg_commitment_high));
-            vector::append(&mut kzg_commitment, to_bytes_24_be(&bcs::to_bytes(&kzg_commitment_low)));
+            kzg_commitment = to_bytes_24_be(bcs::to_bytes(&kzg_commitment_high));
+            append(&mut kzg_commitment, to_bytes_24_be(bcs::to_bytes(&kzg_commitment_low)));
 
-            y = num_to_bytes_be(&((y_high << 128) + y_low));
+            y = num_to_bytes_le(&((y_high << 128) + y_low));
         };
 
         let blob_hash = get_blob_hash(&kzg_commitment);
 
-        let z = *vector::borrow(kzg_segment, 2);
+        let z = *borrow(kzg_segment, 2);
 
-        vector::append(&mut blob_hash, num_to_bytes_be(&z));
-        vector::append(&mut blob_hash, y);
-        vector::append(&mut blob_hash, kzg_commitment);
-        vector::append(&mut blob_hash, *kzg_proof);
+        append(&mut blob_hash, num_to_bytes_le(&z));
+        append(&mut blob_hash, y);
+        append(&mut blob_hash, kzg_commitment);
+        append(&mut blob_hash, *kzg_proof);
 
         let precompile_output = pre_compile::point_evaluation_precompile(blob_hash);
 
@@ -329,6 +333,13 @@ module starknet_addr::starknet_validity {
     #[view]
     public fun state_block_number(): u256 {
         starknet_state::get_block_number(starknet_storage::get_state(@starknet_addr))
+    }
+
+    #[view]
+    public fun to_bytes_24_be(bytes: vector<u8>): vector<u8> {
+        trim_reverse(&mut bytes, 24);
+        reverse(&mut bytes);
+        bytes
     }
 
     #[test(s = @starknet_addr)]
@@ -397,8 +408,8 @@ module starknet_addr::starknet_validity {
         // This test depends on the value of `fact`, which is precomputed and registered before updating the state.
         // All test data is taken from transaction 0xe76c6accacbcedb7f66d5dc3f1a3e189d4e4d194ea88c19ee29955adbc902362.
 
-        fact_registry::init_fact_registry(s);
-        fact_registry::register_fact(x"af6d61465fa108b0e7d4d9bef635dec868bcfa8e9fa14c5486c6017cd552fd4c");
+        init_fact_registry(s);
+        register_fact(s, 0xaf6d61465fa108b0e7d4d9bef635dec868bcfa8e9fa14c5486c6017cd552fd4c);
 
         let kzg_proof: vector<u8> = x"8664b3057bc3aefaf110db484fdc0c422c58209c7f8a331a4c5f853a9e37d0de5f02ec0289d7d0634e49ef813fb8e84d";
         update_state_kzg_da(s, program_output, kzg_proof);
@@ -440,7 +451,7 @@ module starknet_addr::starknet_validity {
         // The expected `onchain_data_hash` and `onchain_data_size` may change when simulating the transaction.
 
         fact_registry::init_fact_registry(s);
-        fact_registry::register_fact(x"b7fae2e2b20a6e0c96d4899cbd47f0af865f53afe75a1482ab5d637a89d8aca4");
+        fact_registry::register_fact(s,0xb7fae2e2b20a6e0c96d4899cbd47f0af865f53afe75a1482ab5d637a89d8aca4);
         update_state(s, program_output, onchain_data_hash, onchain_data_size);
     }
 }

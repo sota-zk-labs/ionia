@@ -1,7 +1,7 @@
 module starknet_addr::pre_compile {
-    use std::vector;
+    use std::vector::{length, trim, trim_reverse, append};
+    use lib_addr::bytes;
 
-    use starknet_addr::bytes;
     use starknet_addr::kzg_helper;
     use starknet_addr::kzg_verify;
 
@@ -25,14 +25,14 @@ module starknet_addr::pre_compile {
 
     public fun point_evaluation_precompile(bytes: vector<u8>): vector<u8> {
         assert!(
-            vector::length(&bytes) == 192,
+            length(&bytes) == 192,
             EINVALID_PRE_COMPILE_INPUT_SIZE
         );
 
-        let proof = vector::trim(&mut bytes, 144);
-        let commitment = vector::trim(&mut bytes, 96);
-        let y = vector::trim_reverse(&mut bytes, 64);
-        let z = vector::trim_reverse(&mut bytes, 32);
+        let proof = trim(&mut bytes, 144);
+        let commitment = trim(&mut bytes, 96);
+        let y = trim_reverse(&mut bytes, 64);
+        let z = trim_reverse(&mut bytes, 32);
         let versioned_hash = bytes;
 
         // Verify commitment matches versioned_hash
@@ -46,8 +46,8 @@ module starknet_addr::pre_compile {
             EINVALID_KZG_COMMITMENT
         );
 
-        let output = bytes::num_to_bytes_be(&FIELD_ELEMENTS_PER_BLOB);
-        vector::append(&mut output, bytes::num_to_bytes_be(&BLS_MODULUS));
+        let output = bytes::num_to_bytes_le(&FIELD_ELEMENTS_PER_BLOB);
+        append(&mut output, bytes::num_to_bytes_le(&BLS_MODULUS));
         return output
     }
 
