@@ -4,17 +4,17 @@ version = "1.0.0"
 authors = []
 
 [addresses]
-#local
-starknet_addr = "0xb50b1b8157ebf7315813c1f745a1e1c68c73111afe2b6761975223d317569b69"
-
-#testnet
-#starknet_addr = "0x373904556c31ee071c1853fea9dc2d57383073eb4df55af10bd395471b947bcf"
+starknet_addr = "_"
+lib_addr = "_"
 
 [dev-addresses]
+starknet_addr = "0xb50b1b8157ebf7315813c1f745a1e1c68c73111afe2b6761975223d317569b69"
+lib_addr = "54ba5979fbdf5fa56c4f4b5147fa33068148d08f6f191c23bca865c21192dcaa"
 
 [dependencies.AptosFramework]
 git = "https://github.com/aptos-labs/aptos-core.git"
-rev = "release-v.1.14"
+rev = "mainnet"
 subdir = "aptos-move/framework/aptos-framework"
 
-[dev-dependencies]
+[dependencies]
+libs = { git = "https://github.com/sota-zk-labs/navori", rev = "layout6", subdir = "libs" }

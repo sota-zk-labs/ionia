@@ -4,9 +4,9 @@ module starknet_addr::starknet_state {
     const BLOCK_HASH_OFFSET: u64 = 0x3;
     // 2
     const BLOCK_NUMBER_OFFSET: u64 = 0x2;
-    // 0x20001
+    // 131073
     const EINVALID_BLOCK_NUMBER: u64 = 0x20001;
-    // 0x20002
+    // 131074
     const EINVALID_PREVIOUS_ROOT: u64 = 0x20002;
     // 0
     const MERKLE_UPDATE_OFFSET: u64 = 0x0;
@@ -28,15 +28,15 @@ module starknet_addr::starknet_state {
         }
     }
 
-    public fun set_global_root(state: &mut State, global_root: u256) {
+    public(friend) fun set_global_root(state: &mut State, global_root: u256) {
         state.global_root = global_root;
     }
 
-    public fun set_block_number(state: &mut State, block_number: u256) {
+    public(friend) fun set_block_number(state: &mut State, block_number: u256) {
         state.block_number = block_number;
     }
 
-    public fun set_block_hash(state: &mut State, block_hash: u256) {
+    public(friend) fun set_block_hash(state: &mut State, block_hash: u256) {
         state.block_hash = block_hash;
     }
 
@@ -63,10 +63,10 @@ module starknet_addr::starknet_state {
 
         let commitment_tree_update = vector::slice(&starknet_output, MERKLE_UPDATE_OFFSET, MERKLE_UPDATE_OFFSET + 2);
         assert!(
-            state.global_root == *vector::borrow(&commitment_tree_update, 0),
+            state.global_root == *vector::borrow(&commitment_tree_update, MERKLE_UPDATE_OFFSET),
             EINVALID_PREVIOUS_ROOT
         );
-        state.global_root = *vector::borrow(&commitment_tree_update, 1);
+        state.global_root = *vector::borrow(&commitment_tree_update, MERKLE_UPDATE_OFFSET + 1);
     }
 
     #[test]

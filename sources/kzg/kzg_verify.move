@@ -6,40 +6,27 @@ module starknet_addr::kzg_verify {
     const BYTES_PER_FIELD_ELEMENT: u64 = 0x20;
     // 48
     const BYTES_PER_PROOF: u64 = 0x30;
-    // 0x50005
-    const EINVALID_KZG_COMMITMENT: u64 = 0x50005;
-    // 0x50003
+    // 327687
+    const EINVALID_KZG_COMMITMENT_SIZE: u64 = 0x50007;
+    // 327683
     const EINVALID_KZG_PROOF_SIZE: u64 = 0x50003;
-    // 0x50006
+    // 327686
     const EINVALID_Y_VALUE: u64 = 0x50006;
-    // 0x50007
-    const EINVALID_Z_VALUE: u64 = 0x50007;
+    // 327688
+    const EINVALID_Z_VALUE: u64 = 0x50008;
+    // G1 Generator
+    const G1_GENERATOR: vector<u8> = x"97f1d3a73197d7942695638c4fa9ac0fc3688c4f9774b905a14e3a3f171bac586c55e83ff97a1aeffb3af00adb22c6bb";
+    // G2 secret
+    const G2S_SETUP: vector<u8> = x"b5bfd7dd8cdeb128843bc287230af38926187075cbfbefa81009a2ce615ac53d2914e5870cb452d2afaaab24f3499f72185cbfee53492714734429b7b38608e23926c911cceceac9a36851477ba4c60b087041de621000edc98edada20c1def2";
+    // G2 generator
+    const G2_GENERATOR: vector<u8> = x"93e02b6052719f607dacd3a088274f65596bd0d09920b61ab5da61bbdc7f5049334cf11213945d57e5ac7d055d042b7e024aa2b2f08f0a91260805272dc51051c6e47ad4fa403b02b4510b647ae3d1770bac0326a805bbefd48056c8c121bdb8";
     // End of generating constants!
 
     use std::vector;
-    use aptos_std::bls12381_algebra::{FormatFrLsb, FormatG1Compr, Fr, G1, G2, Gt};
+    use aptos_std::bls12381_algebra::{FormatFrLsb, FormatG1Compr, Fr, G1, G2, Gt, FormatG2Compr};
     use aptos_std::crypto_algebra::{deserialize, eq, pairing, scalar_mul, sub};
-    use aptos_framework::event::emit;
 
-    use starknet_addr::trusted_setup;
-
-    #[event]
-    struct KZGProofVerification has store, drop {
-        success: bool,
-    }
-
-    public entry fun verify_kzg_proof(
-        commitment_bytes: vector<u8>,
-        z: vector<u8>,
-        y: vector<u8>,
-        proof_bytes: vector<u8>,
-    ) {
-        emit<KZGProofVerification>(KZGProofVerification {
-            success: verify_kzg_proof_impl(commitment_bytes, z, y, proof_bytes)
-        });
-    }
-
-    public fun verify_kzg_proof_impl(
+    public fun verify_kzg_proof(
         commitment_bytes: vector<u8>,
         z: vector<u8>,
         y: vector<u8>,
@@ -47,19 +34,17 @@ module starknet_addr::kzg_verify {
     ): bool {
         assert!(
             vector::length(&commitment_bytes) == BYTES_PER_COMMITMENT,
-            EINVALID_KZG_COMMITMENT
+            EINVALID_KZG_COMMITMENT_SIZE
         );
         assert!(
             vector::length(&proof_bytes) == BYTES_PER_PROOF,
             EINVALID_KZG_PROOF_SIZE
         );
         assert!(
-            // Return error invalid field element
             vector::length(&z) == BYTES_PER_FIELD_ELEMENT,
             EINVALID_Y_VALUE
         );
         assert!(
-            // Return error invalid field element
             vector::length(&y) == BYTES_PER_FIELD_ELEMENT,
             EINVALID_Z_VALUE
         );
@@ -69,10 +54,12 @@ module starknet_addr::kzg_verify {
         let field_commitment = std::option::extract(&mut deserialize<G1, FormatG1Compr>(&commitment_bytes));
         let field_proof = std::option::extract(&mut deserialize<G1, FormatG1Compr>(&proof_bytes));
 
-        let g2s = trusted_setup::get_g2s();
-        let g2 = trusted_setup::get_g2();
+        let g2s = std::option::extract(&mut deserialize<G2, FormatG2Compr>(&G2S_SETUP));
+        let g2 = std::option::extract(&mut deserialize<G2, FormatG2Compr>(&G2_GENERATOR));
+        let g1 = std::option::extract(&mut deserialize<G1, FormatG1Compr>(&G1_GENERATOR));
+
         let a = sub<G2>(&g2s, &scalar_mul<G2, Fr>(&g2, &field_z));
-        let b = sub<G1>(&field_commitment, &scalar_mul<G1, Fr>(&trusted_setup::get_g1_generator(), &field_y));
+        let b = sub<G1>(&field_commitment, &scalar_mul<G1, Fr>(&g1, &field_y));
 
         let lhs = pairing<G1, G2, Gt>(&field_proof, &a);
         let rhs = pairing<G1, G2, Gt>(&b, &g2);
@@ -88,7 +75,7 @@ module starknet_addr::kzg_verify {
         let proof = x"85d5c5ddc49c8b44bace634bed4dd1c2f3ddc5982b459f702a7756e8896b8f29ae5db9c933ccbb9241af9c01587f3896";
 
         assert!(
-            !verify_kzg_proof_impl(comitment, z_bytes, y_bytes, proof),
+            !verify_kzg_proof(comitment, z_bytes, y_bytes, proof),
             1
         );
     }
@@ -100,7 +87,7 @@ module starknet_addr::kzg_verify {
         let z = x"29ef6432c157829fd5a402d6fd6909a502ea73181df1dca79cfd71f42014c505";
         let y = x"a5e1b0055dddd20d976ae79ffb584c472911787e3427fa8934991403a516691b";
         assert!(
-            verify_kzg_proof_impl(commitment, z, y, proof),
+            verify_kzg_proof(commitment, z, y, proof),
             1
         );
     }

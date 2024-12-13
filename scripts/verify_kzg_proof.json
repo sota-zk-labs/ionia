@@ -1,8 +1,6 @@
-
 {
   "function_id": "244701fb94617a6c5c59ebf7b0315ebed25cd070819c777a5d437447499afcb8::kzg::verify_kzg_proof",
-  "type_args": [
-  ],
+  "type_args": [],
   "args": [
     {
       "type": "hex",
