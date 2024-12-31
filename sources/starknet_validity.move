@@ -186,6 +186,14 @@ module starknet_addr::starknet_validity {
         starknet_storage::update_sidecar(@starknet_addr, sidecar);
     }
 
+    public entry fun override_state(
+        global_root: u256,
+        block_number: u256,
+        block_hash: u256
+    ) {
+        starknet_storage::override_state(@starknet_addr, global_root, block_number, block_hash);
+    }
+
     public(friend) fun update_internal_state(
         s: &signer,
         program_output: &vector<u256>,

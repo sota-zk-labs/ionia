@@ -69,6 +69,12 @@ module starknet_addr::starknet_state {
         state.global_root = *vector::borrow(&commitment_tree_update, MERKLE_UPDATE_OFFSET + 1);
     }
 
+    public fun override_state(state: &mut State , global_root: u256, block_number: u256, block_hash: u256) {
+        state.global_root = global_root;
+        state.block_number = block_number;
+        state.block_hash = block_hash;
+    }
+
     #[test]
     fun update_state() {
         let state = State {
@@ -89,7 +95,7 @@ module starknet_addr::starknet_state {
     }
 
     #[test]
-    fun set_state() {
+    fun test_set_state() {
         let state = State {
             global_root: 0,
             block_number: 0,

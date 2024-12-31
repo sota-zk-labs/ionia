@@ -83,4 +83,9 @@ module starknet_addr::starknet_storage {
     public fun get_state(addr: address): State acquires Storage {
         borrow_global<Storage>(addr).state
     }
+
+    public fun override_state(addr: address, global_root: u256, block_number: u256, block_hash: u256) acquires Storage {
+        let state = &mut borrow_global_mut<Storage>(addr).state;
+        starknet_state::override_state(state, global_root, block_number, block_hash)
+    }
 }
